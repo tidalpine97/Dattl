@@ -39,7 +39,7 @@ const COLORS = {
   text:      '#ffffff',
   textMuted: '#888888',
   accent:    '#D97706',
-  warning:   '#F5C542',
+  warning:   '#f5c542',
   expired:   '#E05252',
   overlay:   'rgba(0,0,0,0.7)',
 } as const;
@@ -102,6 +102,7 @@ type FormState = {
   name: string;
   date: Date;
   openedOn: Date;
+  originalOpenedOn: string; // ISO — openedOn when the modal was opened; used for the save intercept
   activePicker: ActivePicker;
   expirySource: 'lookup' | 'manual';
   lookupItem?: DattlItem;
@@ -109,10 +110,12 @@ type FormState = {
 };
 
 function freshForm(): FormState {
+  const now = new Date();
   return {
     name: '',
-    date: new Date(),
-    openedOn: new Date(),
+    date: now,
+    openedOn: now,
+    originalOpenedOn: now.toISOString(),
     activePicker: false,
     expirySource: 'manual',
   };
@@ -170,9 +173,12 @@ export function ListScreen({ mode }: { mode: Mode }) {
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Item[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [isDirty,    setIsDirty]    = useState(false);
   const [form, setForm] = useState<FormState>(freshForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const hasLoaded = useRef(false);
+  const hasLoaded    = useRef(false);
+  const maxPickerDate = useRef(new Date()).current; // stable reference — avoids native crash from recreating Date every render
 
   const { favorites, toggleFavorite } = useFavorites(cfg.favoritesKey);
 
@@ -200,13 +206,14 @@ export function ListScreen({ mode }: { mode: Mode }) {
     saveItems(items, cfg.storageKey).catch(e => console.error('Failed to save items:', e));
   }, [items, cfg.storageKey]);
 
+  // Picker is closed via TextInput onFocus (see below) rather than a keyboardWillShow
+  // listener, because the listener also fires when the iOS inline picker opens its own
+  // year-entry keyboard — that would unmount the picker mid-interaction and crash.
+
+  // Reset success banner each time the modal opens.
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    const sub = Keyboard.addListener('keyboardWillShow', () => {
-      setForm(prev => ({ ...prev, activePicker: false }));
-    });
-    return () => sub.remove();
-  }, []);
+    if (modalVisible) setShowSuccess(false);
+  }, [modalVisible]);
 
   // ── Notification helpers ───────────────────────────────────────────────────
 
@@ -244,12 +251,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
   const openModal = useCallback((item?: Item) => {
     if (item) {
       setEditingId(item.id);
-      const parsedExpiry = item.expiryDate ? new Date(item.expiryDate) : new Date();
-      const parsedOpened = item.dateAdded  ? new Date(item.dateAdded)  : new Date();
+      const safeExpiry = safeDate(item.expiryDate ? new Date(item.expiryDate) : null);
+      const safeOpened = safeDate(item.dateAdded  ? new Date(item.dateAdded)  : null);
       setForm({
         name: item.name,
-        date:     isNaN(parsedExpiry.getTime()) ? new Date() : parsedExpiry,
-        openedOn: isNaN(parsedOpened.getTime()) ? new Date() : parsedOpened,
+        date:             safeExpiry,
+        openedOn:         safeOpened,
+        originalOpenedOn: safeOpened.toISOString(), // snapshot for save intercept
         activePicker: false,
         expirySource: 'manual',
       });
@@ -257,53 +265,101 @@ export function ListScreen({ mode }: { mode: Mode }) {
       setEditingId(null);
       setForm(freshForm());
     }
+    setIsDirty(false);
     setModalVisible(true);
   }, []);
 
-  async function saveItem() {
-    if (!form.name.trim()) return;
+  // Core save — accepts an optional expiry override (used by the Yes prompt handler).
+  // fromPrompt=true means a prompt Yes/No triggered this: never close the modal.
+  async function doSave(overrideExpiry?: Date, fromPrompt = false) {
+    const raw = form.name.trim();
+    if (!raw) return;
 
-    // Fix 1: if the opened-on recalc prompt is still pending, surface it instead of saving.
-    // The user must tap Yes or No before the form can close.
-    const pendingRecalc =
-      form.expirySource === 'lookup' &&
-      !!form.lookupOpenedOn &&
-      form.openedOn.toDateString() !== new Date(form.lookupOpenedOn).toDateString();
-
-    if (pendingRecalc) {
-      // Ensure we're in keyboard phase so the prompt is visible.
-      setForm(prev => ({ ...prev, activePicker: false }));
-      return;
-    }
-
-    const raw  = form.name.trim();
     const name = raw.charAt(0).toUpperCase() + raw.slice(1);
-    const expiryDate = form.date.toISOString();
-    const dateAdded  = form.openedOn.toISOString();
+    // safeDate guard prevents RangeError from toISOString() on an invalid Date.
+    const savedExpiry = safeDate(overrideExpiry ?? form.date);
+    const expiryDate  = savedExpiry.toISOString();
+    const dateAdded   = form.openedOn.toISOString();
+
+    // Sync helper — clears the recalc prompt and keeps the form consistent.
+    const syncForm = (currentOpenedOn: Date) =>
+      setForm(prev => ({
+        ...prev,
+        name,
+        date: savedExpiry,
+        originalOpenedOn: currentOpenedOn.toISOString(),
+      }));
+
+    const showBanner = () => {
+      setShowSuccess(true);
+      setIsDirty(false);
+      setTimeout(() => setShowSuccess(false), 1500);
+    };
 
     if (editingId) {
       const existing = items.find(i => i.id === editingId);
       if (existing) {
         await cancelItemNotifs(existing).catch(e => console.error('Failed to cancel notification on edit:', e));
       }
-
-      const notifFields = await scheduleItemNotifs({ id: editingId, name, expiryDate })
-        .catch(() => ({}));
-
+      const notifFields = await scheduleItemNotifs({ id: editingId, name, expiryDate }).catch(() => ({}));
       setItems(prev => prev.map(item =>
-        item.id === editingId
-          ? { ...item, name, expiryDate, dateAdded, ...notifFields }
-          : item
+        item.id === editingId ? { ...item, name, expiryDate, dateAdded, ...notifFields } : item
       ));
+      syncForm(form.openedOn);
+      showBanner();
     } else {
       const id = Date.now().toString();
-      const notifFields = await scheduleItemNotifs({ id, name, expiryDate })
-        .catch(() => ({}));
-
+      const notifFields = await scheduleItemNotifs({ id, name, expiryDate }).catch(() => ({}));
       setItems(prev => [...prev, { id, name, expiryDate, dateAdded, ...notifFields }]);
+
+      if (fromPrompt) {
+        // Prompt was answered for a new item: stay open (switch to edit mode so a
+        // second Save updates rather than duplicating).
+        setEditingId(id);
+        syncForm(form.openedOn);
+        showBanner();
+      } else {
+        // Normal new-item save: close immediately.
+        setModalVisible(false);
+      }
+    }
+  }
+
+  // Save button handler — intercepts when openedOn changed from its value when the modal opened.
+  async function saveItem() {
+    if (!form.name.trim()) return;
+
+    const openedOnChanged =
+      form.openedOn.toDateString() !== new Date(form.originalOpenedOn).toDateString();
+
+    if (openedOnChanged) {
+      // Surface the recalc prompt; don't save yet.
+      setForm(prev => ({ ...prev, activePicker: false }));
+      return;
     }
 
-    setModalVisible(false);
+    await doSave();
+  }
+
+  // Prompt: Yes — recalculate expiry from new openedOn, then save immediately.
+  async function handlePromptYes() {
+    let newExpiry: Date;
+    if (form.lookupItem) {
+      newExpiry = suggestedExpiryDate(form.lookupItem, form.openedOn);
+    } else {
+      const origMs = new Date(form.originalOpenedOn).getTime();
+      const durMs  = form.date.getTime() - origMs;
+      // Guard: if either value is NaN fall back to current expiry unchanged.
+      newExpiry = isNaN(origMs) || isNaN(durMs)
+        ? safeDate(form.date)
+        : new Date(form.openedOn.getTime() + Math.max(0, durMs));
+    }
+    await doSave(newExpiry, true);
+  }
+
+  // Prompt: No — keep current expiry and save immediately.
+  async function handlePromptNo() {
+    await doSave(undefined, true);
   }
 
   // ── Lookup & suggestion helpers ────────────────────────────────────────────
@@ -314,6 +370,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
   );
 
   const applyLookup = useCallback((lookupItem: DattlItem) => {
+    setIsDirty(true);
     setForm(prev => ({
       ...prev,
       name: lookupItem.de,
@@ -329,9 +386,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
   const sortedItems = useMemo(() => sortItems(items), [items]);
 
   const showExpiryPrompt =
-    form.expirySource === 'lookup' &&
-    !!form.lookupOpenedOn &&
-    form.openedOn.toDateString() !== new Date(form.lookupOpenedOn).toDateString();
+    form.openedOn.toDateString() !== new Date(form.originalOpenedOn).toDateString();
 
   const modalSuggestions = useMemo(() => {
     const seen = new Set<string>();
@@ -436,14 +491,18 @@ export function ListScreen({ mode }: { mode: Mode }) {
               placeholder={cfg.namePlaceholder}
               placeholderTextColor={COLORS.textMuted}
               value={form.name}
-              onChangeText={text => setForm(prev => ({
-                ...prev,
-                name: text,
-                expirySource: 'manual',
-                lookupItem: undefined,
-                lookupOpenedOn: undefined,
-              }))}
+              onChangeText={text => {
+                setIsDirty(true);
+                setForm(prev => ({
+                  ...prev,
+                  name: text,
+                  expirySource: 'manual',
+                  lookupItem: undefined,
+                  lookupOpenedOn: undefined,
+                }));
+              }}
               autoFocus={editingId === null}
+              onFocus={() => setForm(prev => ({ ...prev, activePicker: false }))}
               returnKeyType="done"
               onSubmitEditing={() => {
                 Keyboard.dismiss();
@@ -466,6 +525,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                     contentContainerStyle={styles.pillRow}
                   >
                     {lookupMatches.map(item => (
@@ -489,12 +549,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
+                      keyboardShouldPersistTaps="handled"
                       contentContainerStyle={styles.pillRow}
                     >
                       {modalSuggestions.map(({ name, isFav }) => (
                         <Pressable
                           key={name}
-                          onPress={() => setForm(prev => ({ ...prev, name }))}
+                          onPress={() => { setIsDirty(true); setForm(prev => ({ ...prev, name })); }}
                           style={styles.quickAddPill}
                         >
                           {isFav && <Text style={styles.quickAddStar}>★</Text>}
@@ -514,7 +575,9 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 <Pressable
                   onPress={() => {
                     Keyboard.dismiss();
-                    setForm(prev => ({ ...prev, activePicker: 'openedOn' }));
+                    // Delay mount so the native picker layer has time to finish
+                    // any pending teardown before a new instance is created.
+                    setTimeout(() => setForm(prev => ({ ...prev, activePicker: 'openedOn' })), 100);
                   }}
                   style={styles.dateRow}
                 >
@@ -532,21 +595,11 @@ export function ListScreen({ mode }: { mode: Mode }) {
                       Opened on changed — update expiry too?
                     </Text>
                     <View style={styles.expiryPromptBtns}>
-                      <Pressable
-                        onPress={() => setForm(prev => ({
-                          ...prev,
-                          date: suggestedExpiryDate(prev.lookupItem!, prev.openedOn),
-                          lookupOpenedOn: prev.openedOn.toISOString(),
-                        }))}
-                        style={styles.promptYes}
-                      >
-                        <Text style={styles.promptYesText}>Yes</Text>
+                      <Pressable onPress={handlePromptYes} style={styles.promptYes}>
+                        <Text style={styles.promptYesText}>Yes, update</Text>
                       </Pressable>
-                      <Pressable
-                        onPress={() => setForm(prev => ({ ...prev, expirySource: 'manual' }))}
-                        style={styles.promptNo}
-                      >
-                        <Text style={styles.promptNoText}>No</Text>
+                      <Pressable onPress={handlePromptNo} style={styles.promptNo}>
+                        <Text style={styles.promptNoText}>No, keep</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -556,12 +609,17 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 <Pressable
                   onPress={() => {
                     Keyboard.dismiss();
-                    setForm(prev => ({
+                    // Delay mount so the native picker layer has time to finish
+                    // any pending teardown before a new instance is created.
+                    setTimeout(() => setForm(prev => ({
                       ...prev,
                       activePicker: 'expiry',
                       expirySource: 'manual',
                       lookupOpenedOn: undefined,
-                    }));
+                      // User is manually setting the expiry — treat openedOn as "accepted"
+                      // so the recalc prompt doesn't reappear after they save.
+                      originalOpenedOn: prev.openedOn.toISOString(),
+                    })), 100);
                   }}
                   style={styles.dateRow}
                 >
@@ -575,48 +633,55 @@ export function ListScreen({ mode }: { mode: Mode }) {
             )}
 
             {/* ── Calendar phase ───────────────────────────────────────────── */}
-            {form.activePicker === 'openedOn' && (
+            {/* Single picker instance — never unmounted when switching between openedOn/expiry.
+                Keeping one native component alive avoids the iOS crash that occurs when
+                a new picker mounts before the previous one finishes tearing down. */}
+            {form.activePicker !== false && (
               <DateTimePicker
-                value={safeDate(form.openedOn)}
+                value={safeDate(form.activePicker === 'openedOn' ? form.openedOn : form.date)}
                 mode="date"
                 display={PICKER_INLINE ? 'inline' : 'default'}
                 themeVariant="dark"
                 accentColor="#C96A00"
                 minimumDate={PICKER_MIN_DATE}
-                maximumDate={new Date()}
+                maximumDate={form.activePicker === 'openedOn' ? maxPickerDate : undefined}
                 onChange={(_, selectedDate) => {
-                  if (!PICKER_INLINE) setForm(prev => ({ ...prev, activePicker: false }));
-                  if (selectedDate) setForm(prev => ({ ...prev, openedOn: selectedDate }));
+                  setForm(prev => {
+                    const dismiss = PICKER_INLINE ? {} : { activePicker: false as ActivePicker };
+                    if (!selectedDate) return { ...prev, ...dismiss };
+                    return prev.activePicker === 'openedOn'
+                      ? { ...prev, ...dismiss, openedOn: selectedDate }
+                      : { ...prev, ...dismiss, date: selectedDate };
+                  });
+                  if (selectedDate) setIsDirty(true);
                 }}
                 style={styles.datePicker}
               />
             )}
 
-            {form.activePicker === 'expiry' && (
-              <DateTimePicker
-                value={safeDate(form.date)}
-                mode="date"
-                display={PICKER_INLINE ? 'inline' : 'default'}
-                themeVariant="dark"
-                accentColor="#C96A00"
-                minimumDate={PICKER_MIN_DATE}
-                onChange={(_, selectedDate) => {
-                  if (!PICKER_INLINE) setForm(prev => ({ ...prev, activePicker: false }));
-                  if (selectedDate) setForm(prev => ({ ...prev, date: selectedDate }));
-                }}
-                style={styles.datePicker}
-              />
+            {/* ── Buttons / success banner ──────────────────────────────────
+                New item:        [Cancel]  [Save]  → closes on save
+                Edit, not dirty: [Close]           → closes immediately
+                Edit, dirty:     [Cancel]  [Save]  → shows banner, resets to Close
+                Success:         ✓ Saved banner (replaces buttons for 1.5 s)   */}
+            {showSuccess ? (
+              <View style={styles.successBanner}>
+                <Text style={styles.successText}>✓  Saved</Text>
+              </View>
+            ) : editingId && !isDirty ? (
+              <Pressable onPress={() => setModalVisible(false)} style={styles.closeOnlyBtn}>
+                <Text style={styles.cancelText}>Close</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.modalButtons}>
+                <Pressable onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={saveItem} style={styles.saveBtn}>
+                  <Text style={styles.saveText}>Save</Text>
+                </Pressable>
+              </View>
             )}
-
-            {/* ── Cancel / Save ─────────────────────────────────────────────── */}
-            <View style={styles.modalButtons}>
-              <Pressable onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable onPress={saveItem} style={styles.saveBtn}>
-                <Text style={styles.saveText}>Save</Text>
-              </Pressable>
-            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -817,8 +882,21 @@ const styles = StyleSheet.create({
 
   // ── Modal action buttons ───────────────────────────────────────────────────
   modalButtons: { flexDirection: 'row', gap: 12, paddingBottom: 8 },
+  closeOnlyBtn: { borderRadius: 12, padding: 16, alignItems: 'center' as const, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
   cancelBtn: { ...btnBase, borderWidth: 1, borderColor: COLORS.border },
   cancelText: { fontSize: 16, color: COLORS.textMuted },
   saveBtn: { ...btnBase, backgroundColor: COLORS.accent },
   saveText: { fontSize: 16, color: '#000000', fontWeight: '700' },
+
+  // ── Save success confirmation ──────────────────────────────────────────────
+  successBanner: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingBottom: 22,
+    alignItems: 'center',
+    backgroundColor: 'rgba(74,222,128,0.08)',
+    borderWidth: 1,
+    borderColor: '#4ade8040',
+  },
+  successText: { fontSize: 16, fontWeight: '700', color: '#4ade80' },
 });

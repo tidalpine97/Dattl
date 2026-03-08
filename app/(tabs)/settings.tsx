@@ -1,6 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Button, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
+import * as Sentry from '@sentry/react-native';
 
 export default function SettingsTab() {
   const insets = useSafeAreaInsets();
@@ -10,6 +11,8 @@ export default function SettingsTab() {
     <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
       <Text style={styles.logo}>Dattl</Text>
       <Text style={styles.version}>Version {version}</Text>
+      {/* TODO: remove before App Store submission */}
+      <Button title="Test Sentry" onPress={() => Sentry.captureException(new Error('First error'))} />
     </View>
   );
 }
