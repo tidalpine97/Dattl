@@ -157,6 +157,12 @@ function formatDuration(days: number): string {
   return `${Math.round(months / 12)}yr`;
 }
 
+// Returns d if it is a valid Date, otherwise falls back to today.
+// Prevents DateTimePicker from receiving null/undefined/NaN.
+function safeDate(d: Date | null | undefined): Date {
+  return d instanceof Date && !isNaN(d.getTime()) ? d : new Date();
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ListScreen({ mode }: { mode: Mode }) {
@@ -256,6 +262,19 @@ export function ListScreen({ mode }: { mode: Mode }) {
 
   async function saveItem() {
     if (!form.name.trim()) return;
+
+    // Fix 1: if the opened-on recalc prompt is still pending, surface it instead of saving.
+    // The user must tap Yes or No before the form can close.
+    const pendingRecalc =
+      form.expirySource === 'lookup' &&
+      !!form.lookupOpenedOn &&
+      form.openedOn.toDateString() !== new Date(form.lookupOpenedOn).toDateString();
+
+    if (pendingRecalc) {
+      // Ensure we're in keyboard phase so the prompt is visible.
+      setForm(prev => ({ ...prev, activePicker: false }));
+      return;
+    }
 
     const raw  = form.name.trim();
     const name = raw.charAt(0).toUpperCase() + raw.slice(1);
@@ -558,7 +577,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
             {/* ── Calendar phase ───────────────────────────────────────────── */}
             {form.activePicker === 'openedOn' && (
               <DateTimePicker
-                value={form.openedOn}
+                value={safeDate(form.openedOn)}
                 mode="date"
                 display={PICKER_INLINE ? 'inline' : 'default'}
                 themeVariant="dark"
@@ -575,7 +594,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
 
             {form.activePicker === 'expiry' && (
               <DateTimePicker
-                value={form.date}
+                value={safeDate(form.date)}
                 mode="date"
                 display={PICKER_INLINE ? 'inline' : 'default'}
                 themeVariant="dark"
