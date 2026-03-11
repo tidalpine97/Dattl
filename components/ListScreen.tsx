@@ -628,35 +628,71 @@ export function ListScreen({ mode }: { mode: Mode }) {
               </>
             )}
 
-            {/* ── Calendar phase ───────────────────────────────────────────── */}
-            {/* The picker is ALWAYS in the tree — hiding via styles instead of
-                conditional rendering prevents the iOS native crash that occurs
-                when UIDatePicker is rapidly destroyed and recreated. */}
+            {/* ── Calendar phase ───────────────────────────────────────────────
+                BOTH pickers are ALWAYS in the tree.
+                · Conditional rendering causes rapid UIDatePicker destruction /
+                  recreation → native iOS crash.
+                · A single shared picker that mutates its `value` and adds /
+                  removes `maximumDate` when the active type switches also
+                  crashes — the native component can't handle those simultaneous
+                  prop changes while hidden.
+                · Two dedicated instances keep every prop stable: the openedOn
+                  picker always receives form.openedOn + a fixed maximumDate;
+                  the expiry picker always receives form.date with no max.      */}
             <View
-              style={form.activePicker === false ? styles.pickerHidden : undefined}
+              style={form.activePicker === false ? styles.pickerContainerHidden : undefined}
               pointerEvents={form.activePicker === false ? 'none' : 'auto'}
             >
-              <DateTimePicker
-                value={safeDate(form.activePicker === 'openedOn' ? form.openedOn : form.date)}
-                mode="date"
-                display={PICKER_INLINE ? 'inline' : 'default'}
-                themeVariant="dark"
-                accentColor="#C96A00"
-                minimumDate={PICKER_MIN_DATE}
-                {...(form.activePicker === 'openedOn' ? { maximumDate: maxPickerDate } : {})}
-                onChange={(_, selectedDate) => {
-                  setForm(prev => {
-                    if (prev.activePicker === false) return prev;
-                    const dismiss = PICKER_INLINE ? {} : { activePicker: false as ActivePicker };
-                    if (!selectedDate) return { ...prev, ...dismiss };
-                    return prev.activePicker === 'openedOn'
-                      ? { ...prev, ...dismiss, openedOn: selectedDate }
-                      : { ...prev, ...dismiss, date: selectedDate };
-                  });
-                  if (selectedDate) setIsDirty(true);
-                }}
-                style={styles.datePicker}
-              />
+              {/* Opened-on picker — always mounted, stable value + maximumDate */}
+              <View
+                style={form.activePicker !== 'openedOn' ? styles.pickerSlotHidden : undefined}
+                pointerEvents={form.activePicker !== 'openedOn' ? 'none' : 'auto'}
+              >
+                <DateTimePicker
+                  value={safeDate(form.openedOn)}
+                  mode="date"
+                  display={PICKER_INLINE ? 'inline' : 'default'}
+                  themeVariant="dark"
+                  accentColor="#C96A00"
+                  minimumDate={PICKER_MIN_DATE}
+                  maximumDate={maxPickerDate}
+                  onChange={(_, selectedDate) => {
+                    setForm(prev => {
+                      if (prev.activePicker !== 'openedOn') return prev;
+                      const dismiss = PICKER_INLINE ? {} : { activePicker: false as ActivePicker };
+                      if (!selectedDate) return { ...prev, ...dismiss };
+                      return { ...prev, ...dismiss, openedOn: selectedDate };
+                    });
+                    if (selectedDate) setIsDirty(true);
+                  }}
+                  style={styles.datePicker}
+                />
+              </View>
+
+              {/* Expiry picker — always mounted, stable value, no maximumDate */}
+              <View
+                style={form.activePicker !== 'expiry' ? styles.pickerSlotHidden : undefined}
+                pointerEvents={form.activePicker !== 'expiry' ? 'none' : 'auto'}
+              >
+                <DateTimePicker
+                  value={safeDate(form.date)}
+                  mode="date"
+                  display={PICKER_INLINE ? 'inline' : 'default'}
+                  themeVariant="dark"
+                  accentColor="#C96A00"
+                  minimumDate={PICKER_MIN_DATE}
+                  onChange={(_, selectedDate) => {
+                    setForm(prev => {
+                      if (prev.activePicker !== 'expiry') return prev;
+                      const dismiss = PICKER_INLINE ? {} : { activePicker: false as ActivePicker };
+                      if (!selectedDate) return { ...prev, ...dismiss };
+                      return { ...prev, ...dismiss, date: selectedDate };
+                    });
+                    if (selectedDate) setIsDirty(true);
+                  }}
+                  style={styles.datePicker}
+                />
+              </View>
             </View>
 
             {/* ── Buttons / success banner ──────────────────────────────────
@@ -879,7 +915,15 @@ const styles = StyleSheet.create({
 
   // ── Date picker (calendar phase) ───────────────────────────────────────────
   datePicker: { width: '100%' },
-  pickerHidden: { height: 0, overflow: 'hidden', opacity: 0 },
+  // Outer container collapses to 0 height when no picker is active.
+  // overflow:hidden clips the absolutely-positioned pickers inside, but their
+  // native UIDatePicker frames remain valid (non-zero) — avoiding the iOS crash
+  // that occurs when a UIDatePicker's frame is zeroed while it is mounted.
+  pickerContainerHidden: { height: 0, overflow: 'hidden' },
+  // Inactive picker slot: pulled out of the layout flow (position:absolute) and
+  // made invisible/non-interactive.  The active slot stays in-flow and drives
+  // the container's natural height.
+  pickerSlotHidden: { position: 'absolute', opacity: 0, width: '100%' },
 
   // ── Modal action buttons ───────────────────────────────────────────────────
   modalButtons: { flexDirection: 'row', gap: 12, paddingBottom: 8 },
