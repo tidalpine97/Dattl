@@ -575,9 +575,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 <Pressable
                   onPress={() => {
                     Keyboard.dismiss();
-                    // Delay mount so the native picker layer has time to finish
-                    // any pending teardown before a new instance is created.
-                    setTimeout(() => setForm(prev => ({ ...prev, activePicker: 'openedOn' })), 100);
+                    setForm(prev => ({ ...prev, activePicker: 'openedOn' }));
                   }}
                   style={styles.dateRow}
                 >
@@ -609,9 +607,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 <Pressable
                   onPress={() => {
                     Keyboard.dismiss();
-                    // Delay mount so the native picker layer has time to finish
-                    // any pending teardown before a new instance is created.
-                    setTimeout(() => setForm(prev => ({
+                    setForm(prev => ({
                       ...prev,
                       activePicker: 'expiry',
                       expirySource: 'manual',
@@ -619,7 +615,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                       // User is manually setting the expiry — treat openedOn as "accepted"
                       // so the recalc prompt doesn't reappear after they save.
                       originalOpenedOn: prev.openedOn.toISOString(),
-                    })), 100);
+                    }));
                   }}
                   style={styles.dateRow}
                 >
@@ -633,10 +629,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
             )}
 
             {/* ── Calendar phase ───────────────────────────────────────────── */}
-            {/* Single picker instance — never unmounted when switching between openedOn/expiry.
-                Keeping one native component alive avoids the iOS crash that occurs when
-                a new picker mounts before the previous one finishes tearing down. */}
-            {form.activePicker !== false && (
+            {/* The picker is ALWAYS in the tree — hiding via styles instead of
+                conditional rendering prevents the iOS native crash that occurs
+                when UIDatePicker is rapidly destroyed and recreated. */}
+            <View
+              style={form.activePicker === false ? styles.pickerHidden : undefined}
+              pointerEvents={form.activePicker === false ? 'none' : 'auto'}
+            >
               <DateTimePicker
                 value={safeDate(form.activePicker === 'openedOn' ? form.openedOn : form.date)}
                 mode="date"
@@ -644,9 +643,10 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 themeVariant="dark"
                 accentColor="#C96A00"
                 minimumDate={PICKER_MIN_DATE}
-                maximumDate={form.activePicker === 'openedOn' ? maxPickerDate : undefined}
+                {...(form.activePicker === 'openedOn' ? { maximumDate: maxPickerDate } : {})}
                 onChange={(_, selectedDate) => {
                   setForm(prev => {
+                    if (prev.activePicker === false) return prev;
                     const dismiss = PICKER_INLINE ? {} : { activePicker: false as ActivePicker };
                     if (!selectedDate) return { ...prev, ...dismiss };
                     return prev.activePicker === 'openedOn'
@@ -657,7 +657,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 }}
                 style={styles.datePicker}
               />
-            )}
+            </View>
 
             {/* ── Buttons / success banner ──────────────────────────────────
                 New item:        [Cancel]  [Save]  → closes on save
@@ -879,6 +879,7 @@ const styles = StyleSheet.create({
 
   // ── Date picker (calendar phase) ───────────────────────────────────────────
   datePicker: { width: '100%' },
+  pickerHidden: { height: 0, overflow: 'hidden', opacity: 0 },
 
   // ── Modal action buttons ───────────────────────────────────────────────────
   modalButtons: { flexDirection: 'row', gap: 12, paddingBottom: 8 },
