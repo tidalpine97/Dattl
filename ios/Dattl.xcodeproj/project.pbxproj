@@ -274,7 +274,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourname.dattl";
+				PRODUCT_BUNDLE_IDENTIFIER = "io.dattl.app";
 				PRODUCT_NAME = "Dattl";
 				SWIFT_OBJC_BRIDGING_HEADER = "Dattl/Dattl-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -303,7 +303,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourname.dattl";
+				PRODUCT_BUNDLE_IDENTIFIER = "io.dattl.app";
 				PRODUCT_NAME = "Dattl";
 				SWIFT_OBJC_BRIDGING_HEADER = "Dattl/Dattl-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;

@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>dattl</string>
-          <string>com.yourname.dattl</string>
+          <string>io.dattl.app</string>
         </array>
       </dict>
     </array>
