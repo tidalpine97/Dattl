@@ -16,7 +16,7 @@ export const DATTL_ITEMS: DattlItem[] = [
   // ─── GROCERY ────────────────────────────────────────────────
 
   { de: 'Milch', en: 'Milk', category: 'grocery', daysAfterOpening: 4 },
-  { de: 'H-Milch', en: 'UHT Milk', category: 'grocery', daysAfterOpening: 7, hint: 'nach Öffnen' },
+  { de: 'H-Milch', en: 'UHT Milk', category: 'grocery', daysAfterOpening: 7, hint: 'after opening' },
   { de: 'Butter', en: 'Butter', category: 'grocery', daysAfterOpening: 30 },
   { de: 'Joghurt', en: 'Yogurt', category: 'grocery', daysAfterOpening: 7 },
   { de: 'Topfen', en: 'Quark', category: 'grocery', daysAfterOpening: 5 },
@@ -68,7 +68,7 @@ export const DATTL_ITEMS: DattlItem[] = [
 
   // ─── BATH & BEAUTY ──────────────────────────────────────────
 
-  { de: 'Mascara', en: 'Mascara', category: 'bath', daysAfterOpening: 90, hint: '3 Monate nach Öffnen' },
+  { de: 'Mascara', en: 'Mascara', category: 'bath', daysAfterOpening: 90, hint: '3 months after opening' },
   { de: 'Foundation', en: 'Foundation', category: 'bath', daysAfterOpening: 365 },
   { de: 'Lippenstift', en: 'Lipstick', category: 'bath', daysAfterOpening: 730 },
   { de: 'Lippenpflege', en: 'Lip Balm', category: 'bath', daysAfterOpening: 365 },
@@ -77,7 +77,7 @@ export const DATTL_ITEMS: DattlItem[] = [
   { de: 'Eyeliner', en: 'Eyeliner', category: 'bath', daysAfterOpening: 180 },
   { de: 'Gesichtscreme', en: 'Face Cream', category: 'bath', daysAfterOpening: 180 },
   { de: 'Körperlotion', en: 'Body Lotion', category: 'bath', daysAfterOpening: 365 },
-  { de: 'Sonnencreme', en: 'Sunscreen', category: 'bath', daysAfterOpening: 365, hint: 'jährlich erneuern' },
+  { de: 'Sonnencreme', en: 'Sunscreen', category: 'bath', daysAfterOpening: 365, hint: 'renew annually' },
   { de: 'Duschgel', en: 'Shower Gel', category: 'bath', daysAfterOpening: 365 },
   { de: 'Shampoo', en: 'Shampoo', category: 'bath', daysAfterOpening: 365 },
   { de: 'Conditioner', en: 'Conditioner', category: 'bath', daysAfterOpening: 365 },
@@ -89,10 +89,10 @@ export const DATTL_ITEMS: DattlItem[] = [
   { de: 'Parfüm', en: 'Perfume', category: 'bath', daysAfterOpening: 1095 },
   { de: 'Rasierschaum', en: 'Shaving Foam', category: 'bath', daysAfterOpening: 365 },
   { de: 'Aftershave', en: 'Aftershave', category: 'bath', daysAfterOpening: 1095 },
-  { de: 'Rasierklinge', en: 'Razor Blade', category: 'bath', daysAfterOpening: 30, hint: 'nach erster Nutzung' },
+  { de: 'Rasierklinge', en: 'Razor Blade', category: 'bath', daysAfterOpening: 30, hint: 'after first use' },
   { de: 'Zahnpasta', en: 'Toothpaste', category: 'bath', daysAfterOpening: 365 },
   { de: 'Mundwasser', en: 'Mouthwash', category: 'bath', daysAfterOpening: 365 },
-  { de: 'Zahnbürste', en: 'Toothbrush', category: 'bath', daysAfterOpening: 90, hint: 'alle 3 Monate wechseln' },
+  { de: 'Zahnbürste', en: 'Toothbrush', category: 'bath', daysAfterOpening: 90, hint: 'replace every 3 months' },
   { de: 'Flüssigseife', en: 'Liquid Soap', category: 'bath', daysAfterOpening: 365 },
   { de: 'Handcreme', en: 'Hand Cream', category: 'bath', daysAfterOpening: 365 },
   { de: 'Nagellack', en: 'Nail Polish', category: 'bath', daysAfterOpening: 730 },
@@ -106,14 +106,14 @@ export const DATTL_ITEMS: DattlItem[] = [
   { de: 'Primer', en: 'Primer', category: 'bath', daysAfterOpening: 365 },
   { de: 'BB Cream', en: 'BB Cream', category: 'bath', daysAfterOpening: 365 },
   { de: 'Make-up Entferner', en: 'Makeup Remover', category: 'bath', daysAfterOpening: 180 },
-  { de: 'Augentropfen', en: 'Eye Drops', category: 'bath', daysAfterOpening: 30, hint: 'nach Öffnen' },
+  { de: 'Augentropfen', en: 'Eye Drops', category: 'bath', daysAfterOpening: 30, hint: 'after opening' },
   { de: 'Kontaktlinsen (monatlich)', en: 'Monthly Contact Lenses', category: 'bath', daysAfterOpening: 30 },
   { de: 'Kontaktlinsen (täglich)', en: 'Daily Contact Lenses', category: 'bath', daysAfterOpening: 1 },
   { de: 'Luffa', en: 'Loofah', category: 'bath', daysAfterOpening: 30 },
   { de: 'Wundcreme', en: 'Wound Cream', category: 'bath', daysAfterOpening: 180 },
   { de: 'Ibuprofen', en: 'Ibuprofen', category: 'bath', daysAfterOpening: 180 },
   { de: 'Paracetamol', en: 'Paracetamol', category: 'bath', daysAfterOpening: 180 },
-  { de: 'Nasenspray', en: 'Nasal Spray', category: 'bath', daysAfterOpening: 30, hint: 'nach Öffnen' },
+  { de: 'Nasenspray', en: 'Nasal Spray', category: 'bath', daysAfterOpening: 30, hint: 'after opening' },
   { de: 'Hustensaft', en: 'Cough Syrup', category: 'bath', daysAfterOpening: 30 },
   { de: 'Sonnenbrand Gel', en: 'After Sun Gel', category: 'bath', daysAfterOpening: 365 },
   { de: 'Wunddesinfektionsmittel', en: 'Wound Disinfectant', category: 'bath', daysAfterOpening: 180 },
@@ -121,12 +121,28 @@ export const DATTL_ITEMS: DattlItem[] = [
   { de: 'Fieberthermometer', en: 'Thermometer', category: 'bath', daysAfterOpening: 1825 },
 ];
 
-// Helper: get item by German name (case-insensitive)
+// Helper: fuzzy ranked search across German and English names.
+// Priority order (highest first):
+//   4 — German name starts with query  (e.g. "K" → "Käse", not "Topfen/Quark")
+//   3 — English name starts with query (e.g. "Milk" → Milch)
+//   2 — German name contains query anywhere
+//   1 — English name contains query anywhere
+// Items with no match are excluded. Ties preserve the original list order.
 export function findItem(query: string): DattlItem[] {
+  if (!query) return [];
   const q = query.toLowerCase();
-  return DATTL_ITEMS.filter(
-    item => item.de.toLowerCase().includes(q) || item.en.toLowerCase().includes(q)
-  );
+  const scored = DATTL_ITEMS.map(item => {
+    const de = item.de.toLowerCase();
+    const en = item.en.toLowerCase();
+    let score = 0;
+    if      (de.startsWith(q)) score = 4;
+    else if (en.startsWith(q)) score = 3;
+    else if (de.includes(q))   score = 2;
+    else if (en.includes(q))   score = 1;
+    return { item, score };
+  }).filter(x => x.score > 0);
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map(x => x.item);
 }
 
 // Helper: calculate suggested expiry date from openedOn (defaults to today).

@@ -16,6 +16,7 @@ import {
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Haptics from 'expo-haptics';
 
 import { type Item, loadItems, saveItems } from '@/utils/storage';
 import { DATE_FORMAT, LOCALE, formatDate, getDaysUntilExpiry, getExpiryLabel, getSubscriptionLabel } from '@/utils/dates';
@@ -238,6 +239,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
   // ── Actions ────────────────────────────────────────────────────────────────
 
   const deleteItem = useCallback((id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setItems(prev => {
       const target = prev.find(i => i.id === id);
       if (target) {
@@ -291,6 +293,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
       }));
 
     const showBanner = () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowSuccess(true);
       setIsDirty(false);
       setTimeout(() => setShowSuccess(false), 1500);
@@ -320,6 +323,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
         showBanner();
       } else {
         // Normal new-item save: close immediately.
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setModalVisible(false);
       }
     }
@@ -466,6 +470,21 @@ export function ListScreen({ mode }: { mode: Mode }) {
         data={sortedItems}
         keyExtractor={item => item.id}
         renderItem={renderItem}
+        contentContainerStyle={sortedItems.length === 0 ? styles.emptyContainer : undefined}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons
+              name={mode === 'item' ? 'basket-outline' : 'card-outline'}
+              size={64}
+              color={COLORS.textMuted}
+            />
+            <Text style={styles.emptyTitle}>Nothing here yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap the button below to add your first{' '}
+              {mode === 'item' ? 'item' : 'subscription'}.
+            </Text>
+          </View>
+        }
       />
 
       <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 8 }]}>
@@ -696,11 +715,22 @@ export function ListScreen({ mode }: { mode: Mode }) {
             </View>
 
             {/* ── Buttons / success banner ──────────────────────────────────
+                Picker open:     [Done]            → collapses picker, stays in modal
                 New item:        [Cancel]  [Save]  → closes on save
                 Edit, not dirty: [Close]           → closes immediately
                 Edit, dirty:     [Cancel]  [Save]  → shows banner, resets to Close
                 Success:         ✓ Saved banner (replaces buttons for 1.5 s)   */}
-            {showSuccess ? (
+            {form.activePicker !== false ? (
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setForm(prev => ({ ...prev, activePicker: false }));
+                }}
+                style={styles.doneBtn}
+              >
+                <Text style={styles.doneBtnText}>Done</Text>
+              </Pressable>
+            ) : showSuccess ? (
               <View style={styles.successBanner}>
                 <Text style={styles.successText}>✓  Saved</Text>
               </View>
@@ -788,6 +818,29 @@ const styles = StyleSheet.create({
   statusExpired: { color: COLORS.expired },
   statusNeutral: { color: COLORS.textMuted },
   starBtn: { paddingHorizontal: 10, paddingVertical: 6 },
+
+  // ── Empty state ────────────────────────────────────────────────────────────
+  emptyContainer: { flex: 1 },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingBottom: 60,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    maxWidth: 220,
+    lineHeight: 20,
+  },
 
   // ── Bottom action area ─────────────────────────────────────────────────────
   bottomSection: {
@@ -926,6 +979,8 @@ const styles = StyleSheet.create({
   pickerSlotHidden: { position: 'absolute', opacity: 0, width: '100%' },
 
   // ── Modal action buttons ───────────────────────────────────────────────────
+  doneBtn: { ...btnBase, backgroundColor: COLORS.accent, marginBottom: 8 },
+  doneBtnText: { fontSize: 16, color: '#000000', fontWeight: '700' },
   modalButtons: { flexDirection: 'row', gap: 12, paddingBottom: 8 },
   closeOnlyBtn: { borderRadius: 12, padding: 16, alignItems: 'center' as const, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
   cancelBtn: { ...btnBase, borderWidth: 1, borderColor: COLORS.border },
