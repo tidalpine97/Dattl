@@ -40,6 +40,14 @@ export type Strings = {
   // Quick Add label
   quickAdd: string;
 
+  // Onboarding
+  onboardingSkip:         string;
+  onboardingNext:         string;
+  onboardingGetStarted:   string;
+  onboardingAllowNotifs:  string;
+  onboardingSkipNotifs:   string;
+  onboardingSlides: ReadonlyArray<{ title: string; subtitle: string }>;
+
   // Health overview card
   overviewAllClear:       string;
   overviewNeedsAttention: (n: number) => string;
@@ -110,6 +118,26 @@ export const STRINGS: Record<Lang, Strings> = {
 
     quickAdd: 'Quick Add',
 
+    onboardingSkip:        'Skip',
+    onboardingNext:        'Next',
+    onboardingGetStarted:  'Get Started',
+    onboardingAllowNotifs: 'Allow Notifications',
+    onboardingSkipNotifs:  'Skip for now',
+    onboardingSlides: [
+      {
+        title:    'Know before it goes',
+        subtitle: 'Track expiry dates for your groceries, cosmetics, and subscriptions — all in one place.',
+      },
+      {
+        title:    'Add in seconds',
+        subtitle: 'Type a name and Dattl suggests the right expiry automatically. Tap to fill it in.',
+      },
+      {
+        title:    'Never miss a date',
+        subtitle: 'Allow notifications and Dattl will remind you before things expire so you can act in time.',
+      },
+    ],
+
     overviewAllClear:       'All clear',
     overviewNeedsAttention: n => n === 1 ? '1 needs attention' : `${n} need attention`,
     overviewExpiredLabel:   'expired',
@@ -174,6 +202,26 @@ export const STRINGS: Record<Lang, Strings> = {
     noKeep:       'Nein, behalten',
 
     quickAdd: 'Schnell hinzufügen',
+
+    onboardingSkip:        'Überspringen',
+    onboardingNext:        'Weiter',
+    onboardingGetStarted:  'Loslegen',
+    onboardingAllowNotifs: 'Benachrichtigungen erlauben',
+    onboardingSkipNotifs:  'Jetzt überspringen',
+    onboardingSlides: [
+      {
+        title:    'Behalte den Überblick',
+        subtitle: 'Verfolge Ablaufdaten für Lebensmittel, Kosmetik und Abos — alles an einem Ort.',
+      },
+      {
+        title:    'In Sekunden hinzufügen',
+        subtitle: 'Gib einen Namen ein und Dattl schlägt das Ablaufdatum automatisch vor. Tippe zum Ausfüllen.',
+      },
+      {
+        title:    'Nie wieder verpassen',
+        subtitle: 'Erlaube Benachrichtigungen und Dattl erinnert dich rechtzeitig bevor etwas abläuft.',
+      },
+    ],
 
     overviewAllClear:       'Alles ok',
     overviewNeedsAttention: n => n === 1 ? '1 braucht Aufmerksamkeit' : `${n} brauchen Aufmerksamkeit`,

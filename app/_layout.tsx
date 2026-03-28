@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
@@ -8,9 +8,11 @@ import 'react-native-reanimated'; // must be imported in the root layout to init
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import { useFonts, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { LanguageProvider } from '@/context/language';
+import { Onboarding } from '@/components/Onboarding';
 import * as Sentry from '@sentry/react-native';
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
@@ -109,14 +111,27 @@ export default Sentry.wrap(function RootLayout() {
   // is used as a fallback and the app remains fully functional.
   const [fontsLoaded, fontError] = useFonts({ Poppins_800ExtraBold });
 
-  // Hide the splash screen once fonts are ready (or have failed).
-  // The two-condition guard prevents an infinite splash if the font CDN is unreachable.
-  useEffect(() => {
-    if (fontsLoaded || fontError) SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
+  // null = still loading, false = not yet onboarded, true = onboarded
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
-  // Render nothing while fonts are still loading — splash screen is still visible.
-  if (!fontsLoaded && !fontError) return null;
+  useEffect(() => {
+    AsyncStorage.getItem('dattl_onboarded')
+      .then(val => setOnboarded(val === 'true'))
+      .catch(() => setOnboarded(false));
+  }, []);
+
+  // Hide the splash screen once fonts and onboarding check are both ready.
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && onboarded !== null) SplashScreen.hideAsync();
+  }, [fontsLoaded, fontError, onboarded]);
+
+  // Render nothing while either fonts or onboarding check is still loading.
+  if ((!fontsLoaded && !fontError) || onboarded === null) return null;
+
+  function handleOnboardingDone() {
+    AsyncStorage.setItem('dattl_onboarded', 'true').catch(() => {});
+    setOnboarded(true);
+  }
 
   return (
     // GestureHandlerRootView must wrap the entire app for Swipeable (and any
@@ -137,6 +152,9 @@ export default Sentry.wrap(function RootLayout() {
               Kept here in case it's useful for future features — not used in V1. */}
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
+
+        {/* Onboarding overlay — shown only on first launch, sits above the Stack */}
+        {!onboarded && <Onboarding onDone={handleOnboardingDone} />}
 
         {/* StatusBar sits above the app content (clock, battery, signal).
             style="light" keeps icons white to contrast against the dark background. */}
