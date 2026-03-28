@@ -29,6 +29,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withDattlWidget",
       [
         "expo-splash-screen",
         {

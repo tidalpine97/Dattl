@@ -25,8 +25,9 @@ export function getDaysUntilExpiry(isoDate: string): number {
 }
 
 // Formats an ISO date string for display using the shared locale and format.
-export function formatDate(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString(LOCALE, DATE_FORMAT);
+// Pass a locale override when the app language differs from the default.
+export function formatDate(isoDate: string, locale = LOCALE): string {
+  return new Date(isoDate).toLocaleDateString(locale, DATE_FORMAT);
 }
 
 // Human-readable relative label for the days-remaining value.

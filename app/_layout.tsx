@@ -10,6 +10,7 @@ import * as Notifications from 'expo-notifications';
 import { useFonts, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { LanguageProvider } from '@/context/language';
 import * as Sentry from '@sentry/react-native';
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
@@ -121,6 +122,7 @@ export default Sentry.wrap(function RootLayout() {
     // GestureHandlerRootView must wrap the entire app for Swipeable (and any
     // other gesture-handler components) to work. flex:1 ensures it fills the screen.
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <LanguageProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
 
         {/* Stack is the navigation container for the whole app.
@@ -140,6 +142,7 @@ export default Sentry.wrap(function RootLayout() {
             style="light" keeps icons white to contrast against the dark background. */}
         <StatusBar style="light" />
       </ThemeProvider>
+      </LanguageProvider>
     </GestureHandlerRootView>
   );
 });

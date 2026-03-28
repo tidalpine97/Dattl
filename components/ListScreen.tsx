@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   FlatList,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -19,9 +20,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 
 import { type Item, loadItems, saveItems } from '@/utils/storage';
-import { DATE_FORMAT, LOCALE, formatDate, getDaysUntilExpiry, getExpiryLabel, getSubscriptionLabel } from '@/utils/dates';
+import { DATE_FORMAT, formatDate, getDaysUntilExpiry, getExpiryLabel, getSubscriptionLabel } from '@/utils/dates';
 import { useFavorites } from '@/hooks/use-favorites';
 import { type DattlItem, findItem, suggestedExpiryDate } from '@/constants/dattlItems';
+import { useLanguage } from '@/context/language';
+import { STRINGS } from '@/constants/i18n';
+import { syncWidgetItems } from '@/utils/sharedStorage';
 import {
   cancelNotification,
   cancelSubscriptionNotifications,
@@ -172,6 +176,9 @@ function safeDate(d: Date | null | undefined): Date {
 export function ListScreen({ mode }: { mode: Mode }) {
   const cfg = MODE_CONFIG[mode];
   const insets = useSafeAreaInsets();
+  const { lang } = useLanguage();
+  const t = STRINGS[lang];
+  const tcfg = t[mode];
   const [items, setItems] = useState<Item[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -205,7 +212,9 @@ export function ListScreen({ mode }: { mode: Mode }) {
   useEffect(() => {
     if (!hasLoaded.current) return;
     saveItems(items, cfg.storageKey).catch(e => console.error('Failed to save items:', e));
-  }, [items, cfg.storageKey]);
+    // Keep the widget in sync — only the items list drives the widget, not subscriptions.
+    if (mode === 'item') syncWidgetItems(items);
+  }, [items, cfg.storageKey, mode]);
 
   // Picker is closed via TextInput onFocus (see below) rather than a keyboardWillShow
   // listener, because the listener also fires when the iOS inline picker opens its own
@@ -389,6 +398,18 @@ export function ListScreen({ mode }: { mode: Mode }) {
 
   const sortedItems = useMemo(() => sortItems(items), [items]);
 
+  // ── Health overview ─────────────────────────────────────────────────────────
+  const overview = useMemo(() => {
+    const expired = sortedItems.filter(i => getDaysUntilExpiry(i.expiryDate) < 0).length;
+    const soon    = sortedItems.filter(i => {
+      const d = getDaysUntilExpiry(i.expiryDate);
+      return d >= 0 && d <= 7;
+    }).length;
+    const ok        = sortedItems.length - expired - soon;
+    const attention = expired + soon;
+    return { expired, soon, ok, attention };
+  }, [sortedItems]);
+
   const showExpiryPrompt =
     form.openedOn.toDateString() !== new Date(form.originalOpenedOn).toDateString();
 
@@ -425,7 +446,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
         <Swipeable
           renderRightActions={() => (
             <Pressable onPress={() => deleteItem(item.id)} style={styles.swipeDeleteAction}>
-              <Text style={styles.swipeDeleteText}>Delete</Text>
+              <Text style={styles.swipeDeleteText}>{t.delete}</Text>
             </Pressable>
           )}
         >
@@ -433,12 +454,12 @@ export function ListScreen({ mode }: { mode: Mode }) {
             <View style={styles.info}>
               <Text style={styles.name}>{item.name}</Text>
               {item.dateAdded && (
-                <Text style={styles.openedOn}>{cfg.cardDateLabel} {formatDate(item.dateAdded)}</Text>
+                <Text style={styles.openedOn}>{tcfg.cardDateLabel} {formatDate(item.dateAdded, t.locale)}</Text>
               )}
             </View>
             <View style={styles.rightSide}>
               <Text style={[styles.statusLabel, getStatusLabelStyle(daysLeft)]}>
-                {cfg.statusLabel(daysLeft)}
+                {tcfg.statusLabel(daysLeft)}
               </Text>
               <Pressable
                 onPress={() => toggleFavorite(item.name)}
@@ -456,7 +477,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
         </Swipeable>
       </View>
     );
-  }, [deleteItem, openModal, toggleFavorite, favorites, cfg]);
+  }, [deleteItem, openModal, toggleFavorite, favorites, cfg, t, tcfg]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -466,6 +487,60 @@ export function ListScreen({ mode }: { mode: Mode }) {
     <View style={styles.container}>
       <Text style={styles.header}>Dattl</Text>
 
+      {/* ── Health overview card ────────────────────────────────────────────── */}
+      {sortedItems.length > 0 && (() => {
+        const { expired, soon, ok, attention } = overview;
+        const allClear   = attention === 0;
+        const badgeColor = expired > 0 ? COLORS.expired : soon > 0 ? COLORS.warning : '#4ade80';
+        const total      = expired + soon + ok;
+
+        return (
+          <View style={styles.overviewCard}>
+            {/* Circular badge (ring gauge) */}
+            <View style={[styles.overviewBadge, { borderColor: badgeColor }]}>
+              <Text style={[styles.overviewBadgeText, { color: badgeColor }]}>
+                {allClear ? '✓' : attention}
+              </Text>
+            </View>
+
+            {/* Right side */}
+            <View style={styles.overviewContent}>
+              <Text style={[styles.overviewTitle, { color: allClear ? '#4ade80' : COLORS.text }]}>
+                {allClear
+                  ? t.overviewAllClear
+                  : t.overviewNeedsAttention(attention)}
+              </Text>
+
+              {/* Segmented bar */}
+              <View style={styles.overviewBar}>
+                {expired > 0 && (
+                  <View style={[styles.overviewSeg, { flex: expired, backgroundColor: COLORS.expired }]} />
+                )}
+                {soon > 0 && (
+                  <View style={[styles.overviewSeg, { flex: soon, backgroundColor: COLORS.warning }]} />
+                )}
+                {ok > 0 && (
+                  <View style={[styles.overviewSeg, { flex: ok, backgroundColor: '#2e2e2e' }]} />
+                )}
+                {total === 0 && (
+                  <View style={[styles.overviewSeg, { flex: 1, backgroundColor: '#2e2e2e' }]} />
+                )}
+              </View>
+
+              {/* Meta label */}
+              {!allClear && (
+                <Text style={styles.overviewMeta}>
+                  {[
+                    expired > 0 ? `${expired} ${t.overviewExpiredLabel}` : '',
+                    soon    > 0 ? `${soon} ${t.overviewSoonLabel}`     : '',
+                  ].filter(Boolean).join('  ·  ')}
+                </Text>
+              )}
+            </View>
+          </View>
+        );
+      })()}
+
       <FlatList
         data={sortedItems}
         keyExtractor={item => item.id}
@@ -473,23 +548,19 @@ export function ListScreen({ mode }: { mode: Mode }) {
         contentContainerStyle={sortedItems.length === 0 ? styles.emptyContainer : undefined}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons
-              name={mode === 'item' ? 'basket-outline' : 'card-outline'}
-              size={64}
-              color={COLORS.textMuted}
+            <Image
+              source={require('../assets/images/icon.png')}
+              style={styles.emptyLogo}
             />
-            <Text style={styles.emptyTitle}>Nothing here yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Tap the button below to add your first{' '}
-              {mode === 'item' ? 'item' : 'subscription'}.
-            </Text>
+            <Text style={styles.emptyTitle}>{tcfg.emptyTitle}</Text>
+            <Text style={styles.emptySubtitle}>{tcfg.emptySubtitle}</Text>
           </View>
         }
       />
 
       <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 8 }]}>
         <Pressable onPress={() => openModal()} style={styles.addButton}>
-          <Text style={styles.addButtonText}>{cfg.addButtonText}</Text>
+          <Text style={styles.addButtonText}>{tcfg.addButton}</Text>
         </Pressable>
       </View>
 
@@ -501,13 +572,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
         >
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>
-              {editingId ? cfg.editTitle : cfg.newTitle}
+              {editingId ? tcfg.editTitle : tcfg.newTitle}
             </Text>
 
             {/* ── Name field ──────────────────────────────────────────────── */}
             <TextInput
               style={styles.input}
-              placeholder={cfg.namePlaceholder}
+              placeholder={tcfg.placeholder}
               placeholderTextColor={COLORS.textMuted}
               value={form.name}
               onChangeText={text => {
@@ -564,7 +635,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
               ) : (
                 modalSuggestions.length > 0 && (
                   <View>
-                    <Text style={styles.quickAddLabel}>Quick Add</Text>
+                    <Text style={styles.quickAddLabel}>{t.quickAdd}</Text>
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
@@ -598,9 +669,9 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   }}
                   style={styles.dateRow}
                 >
-                  <Text style={styles.dateRowLabel}>{cfg.openedOnLabel}</Text>
+                  <Text style={styles.dateRowLabel}>{tcfg.openedOnLabel}</Text>
                   <Text style={styles.dateRowValue}>
-                    {form.openedOn.toLocaleDateString(LOCALE, DATE_FORMAT)}
+                    {form.openedOn.toLocaleDateString(t.locale, DATE_FORMAT)}
                   </Text>
                   <Text style={styles.dateRowChevron}>›</Text>
                 </Pressable>
@@ -608,15 +679,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 {/* Expiry recalculation prompt (items mode only) */}
                 {showExpiryPrompt && (
                   <View style={styles.expiryPrompt}>
-                    <Text style={styles.expiryPromptText}>
-                      Opened on changed — update expiry too?
-                    </Text>
+                    <Text style={styles.expiryPromptText}>{t.expiryPrompt}</Text>
                     <View style={styles.expiryPromptBtns}>
                       <Pressable onPress={handlePromptYes} style={styles.promptYes}>
-                        <Text style={styles.promptYesText}>Yes, update</Text>
+                        <Text style={styles.promptYesText}>{t.yesUpdate}</Text>
                       </Pressable>
                       <Pressable onPress={handlePromptNo} style={styles.promptNo}>
-                        <Text style={styles.promptNoText}>No, keep</Text>
+                        <Text style={styles.promptNoText}>{t.noKeep}</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -638,9 +707,9 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   }}
                   style={styles.dateRow}
                 >
-                  <Text style={styles.dateRowLabel}>{cfg.expiryLabel}</Text>
+                  <Text style={styles.dateRowLabel}>{tcfg.expiryLabel}</Text>
                   <Text style={styles.dateRowValue}>
-                    {form.date.toLocaleDateString(LOCALE, DATE_FORMAT)}
+                    {form.date.toLocaleDateString(t.locale, DATE_FORMAT)}
                   </Text>
                   <Text style={styles.dateRowChevron}>›</Text>
                 </Pressable>
@@ -728,23 +797,23 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 }}
                 style={styles.doneBtn}
               >
-                <Text style={styles.doneBtnText}>Done</Text>
+                <Text style={styles.doneBtnText}>{t.done}</Text>
               </Pressable>
             ) : showSuccess ? (
               <View style={styles.successBanner}>
-                <Text style={styles.successText}>✓  Saved</Text>
+                <Text style={styles.successText}>{t.saved}</Text>
               </View>
             ) : editingId && !isDirty ? (
               <Pressable onPress={() => setModalVisible(false)} style={styles.closeOnlyBtn}>
-                <Text style={styles.cancelText}>Close</Text>
+                <Text style={styles.cancelText}>{t.close}</Text>
               </Pressable>
             ) : (
               <View style={styles.modalButtons}>
                 <Pressable onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
-                  <Text style={styles.cancelText}>Cancel</Text>
+                  <Text style={styles.cancelText}>{t.cancel}</Text>
                 </Pressable>
                 <Pressable onPress={saveItem} style={styles.saveBtn}>
-                  <Text style={styles.saveText}>Save</Text>
+                  <Text style={styles.saveText}>{t.save}</Text>
                 </Pressable>
               </View>
             )}
@@ -825,8 +894,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 16,
     paddingBottom: 60,
+  },
+  emptyLogo: {
+    width: 90,
+    height: 90,
+    borderRadius: 20,
+    marginBottom: 4,
   },
   emptyTitle: {
     fontSize: 20,
@@ -840,6 +915,52 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 220,
     lineHeight: 20,
+  },
+
+  // ── Health overview ────────────────────────────────────────────────────────
+  overviewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  overviewBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  overviewBadgeText: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  overviewContent: {
+    flex: 1,
+    gap: 6,
+  },
+  overviewTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  overviewBar: {
+    flexDirection: 'row',
+    height: 5,
+    borderRadius: 3,
+    overflow: 'hidden',
+    gap: 2,
+  },
+  overviewSeg: {
+    borderRadius: 3,
+  },
+  overviewMeta: {
+    fontSize: 11,
+    color: COLORS.textMuted,
   },
 
   // ── Bottom action area ─────────────────────────────────────────────────────

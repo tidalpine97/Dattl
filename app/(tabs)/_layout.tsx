@@ -1,11 +1,16 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '@/context/language';
+import { STRINGS } from '@/constants/i18n';
 
 const ACTIVE   = '#D97706';
 const INACTIVE = '#888888';
 const TAB_BG   = '#111111';
 
 export default function TabLayout() {
+  const { lang } = useLanguage();
+  const t = STRINGS[lang];
+
   return (
     <Tabs screenOptions={{
       headerShown: false,
@@ -19,7 +24,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Items',
+          title: t.tabItems,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
           ),
@@ -28,7 +33,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="subscriptions"
         options={{
-          title: 'Subscriptions',
+          title: t.tabSubscriptions,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="refresh-outline" size={size} color={color} />
           ),
@@ -37,7 +42,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: t.tabSettings,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
