@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import * as SplashScreen from 'expo-splash-screen';
-import 'react-native-reanimated'; // must be imported in the root layout to initialise the library
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import * as Notifications from 'expo-notifications';
-import { useFonts, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
+import { Poppins_800ExtraBold, useFonts } from '@expo-google-fonts/poppins';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import 'react-native-reanimated'; // must be imported in the root layout to initialise the library
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { LanguageProvider } from '@/context/language';
 import { Onboarding } from '@/components/Onboarding';
+import { LanguageProvider } from '@/context/language';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import * as Sentry from '@sentry/react-native';
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
@@ -116,7 +116,7 @@ export default Sentry.wrap(function RootLayout() {
 
   useEffect(() => {
     AsyncStorage.getItem('dattl_onboarded')
-      .then(val => setOnboarded(val === 'true'))
+      .then(val => setOnboarded(val === 'false'))
       .catch(() => setOnboarded(false));
   }, []);
 

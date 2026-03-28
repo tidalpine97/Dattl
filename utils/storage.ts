@@ -9,8 +9,10 @@ export type Item = {
   expiryDate: string;      // ISO string — AsyncStorage only holds strings, not Date objects
   dateAdded?: string;      // ISO string — set when the item is first created.
                            // Optional so older items without this field still load cleanly.
-  notificationId?: string;  // Items: single expiry-day notification ID.
+  notificationId?: string;    // Items: single expiry-day notification ID.
   notificationIds?: string[]; // Subscriptions: up to 7 notification IDs (one per warning day).
+  longerUsableHint?: string;   // German hint — set when added via lookup; shown on expired cards.
+  longerUsableHintEn?: string; // English counterpart.
 };
 
 // ─── Storage ──────────────────────────────────────────────────────────────────

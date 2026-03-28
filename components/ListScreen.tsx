@@ -112,6 +112,8 @@ type FormState = {
   expirySource: 'lookup' | 'manual';
   lookupItem?: DattlItem;
   lookupOpenedOn?: string;
+  longerUsableHint?: string;   // persisted from lookup; cleared on manual name change
+  longerUsableHintEn?: string;
 };
 
 function freshForm(): FormState {
@@ -271,6 +273,8 @@ export function ListScreen({ mode }: { mode: Mode }) {
         originalOpenedOn: safeOpened.toISOString(), // snapshot for save intercept
         activePicker: false,
         expirySource: 'manual',
+        longerUsableHint: item.longerUsableHint,
+        longerUsableHintEn: item.longerUsableHintEn,
       });
     } else {
       setEditingId(null);
@@ -314,15 +318,19 @@ export function ListScreen({ mode }: { mode: Mode }) {
         await cancelItemNotifs(existing).catch(e => console.error('Failed to cancel notification on edit:', e));
       }
       const notifFields = await scheduleItemNotifs({ id: editingId, name, expiryDate }).catch(() => ({}));
+      const longerUsableHint = form.longerUsableHint;
+      const longerUsableHintEn = form.longerUsableHintEn;
       setItems(prev => prev.map(item =>
-        item.id === editingId ? { ...item, name, expiryDate, dateAdded, ...notifFields } : item
+        item.id === editingId ? { ...item, name, expiryDate, dateAdded, longerUsableHint, longerUsableHintEn, ...notifFields } : item
       ));
       syncForm(form.openedOn);
       showBanner();
     } else {
       const id = Date.now().toString();
       const notifFields = await scheduleItemNotifs({ id, name, expiryDate }).catch(() => ({}));
-      setItems(prev => [...prev, { id, name, expiryDate, dateAdded, ...notifFields }]);
+      const longerUsableHint = form.longerUsableHint;
+      const longerUsableHintEn = form.longerUsableHintEn;
+      setItems(prev => [...prev, { id, name, expiryDate, dateAdded, longerUsableHint, longerUsableHintEn, ...notifFields }]);
 
       if (fromPrompt) {
         // Prompt was answered for a new item: stay open (switch to edit mode so a
@@ -377,10 +385,11 @@ export function ListScreen({ mode }: { mode: Mode }) {
 
   // ── Lookup & suggestion helpers ────────────────────────────────────────────
 
-  const lookupMatches = useMemo(
-    () => (cfg.showLookup ? findItem(form.name) : []),
-    [form.name, cfg.showLookup]
-  );
+  const lookupMatches = useMemo(() => {
+    if (!cfg.showLookup || editingId) return [];
+    const q = form.name.toLowerCase();
+    return findItem(form.name).filter(item => item.de.toLowerCase() !== q);
+  }, [form.name, cfg.showLookup, editingId]);
 
   const applyLookup = useCallback((lookupItem: DattlItem) => {
     setIsDirty(true);
@@ -391,6 +400,8 @@ export function ListScreen({ mode }: { mode: Mode }) {
       expirySource: 'lookup',
       lookupItem,
       lookupOpenedOn: prev.openedOn.toISOString(),
+      longerUsableHint: lookupItem.longerUsableHint,
+      longerUsableHintEn: lookupItem.longerUsableHintEn,
     }));
   }, []);
 
@@ -455,6 +466,11 @@ export function ListScreen({ mode }: { mode: Mode }) {
               <Text style={styles.name}>{item.name}</Text>
               {item.dateAdded && (
                 <Text style={styles.openedOn}>{tcfg.cardDateLabel} {formatDate(item.dateAdded, t.locale)}</Text>
+              )}
+              {daysLeft < 0 && (item.longerUsableHint || item.longerUsableHintEn) && (
+                <Text style={styles.longerUsableHint}>
+                  ⓘ {lang === 'de' ? item.longerUsableHint : (item.longerUsableHintEn ?? item.longerUsableHint)}
+                </Text>
               )}
             </View>
             <View style={styles.rightSide}>
@@ -589,6 +605,8 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   expirySource: 'manual',
                   lookupItem: undefined,
                   lookupOpenedOn: undefined,
+                  longerUsableHint: undefined,
+                  longerUsableHintEn: undefined,
                 }));
               }}
               autoFocus={editingId === null}
@@ -609,7 +627,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 When typing → lookup matches.
                 When empty  → favorites / recent Quick Add pills.
                 Hidden once a calendar is visible.                       */}
-            {cfg.showLookup && form.activePicker === false && (
+            {cfg.showLookup && !editingId && form.activePicker === false && (
               isTyping ? (
                 lookupMatches.length > 0 && (
                   <ScrollView
@@ -868,6 +886,7 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   name: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   openedOn: { fontSize: 11, color: COLORS.textMuted, marginTop: 3 },
+  longerUsableHint: { fontSize: 11, color: COLORS.accent, marginTop: 3 },
 
   // ── Swipe-to-delete ────────────────────────────────────────────────────────
   swipeDeleteAction: {
@@ -1100,7 +1119,7 @@ const styles = StyleSheet.create({
   pickerSlotHidden: { position: 'absolute', opacity: 0, width: '100%' },
 
   // ── Modal action buttons ───────────────────────────────────────────────────
-  doneBtn: { ...btnBase, backgroundColor: COLORS.accent, marginBottom: 8 },
+  doneBtn: { borderRadius: 12, padding: 16, alignItems: 'center', backgroundColor: COLORS.accent, marginBottom: 8 },
   doneBtnText: { fontSize: 16, color: '#000000', fontWeight: '700' },
   modalButtons: { flexDirection: 'row', gap: 12, paddingBottom: 8 },
   closeOnlyBtn: { borderRadius: 12, padding: 16, alignItems: 'center' as const, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
