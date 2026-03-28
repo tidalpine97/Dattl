@@ -12,6 +12,7 @@ export type ModeStrings = {
   emptyTitle: string;
   emptySubtitle: string;
   statusLabel: (daysLeft: number) => string;
+  overviewNeedsAttention: (n: number) => string;
 };
 
 export type Strings = {
@@ -49,10 +50,9 @@ export type Strings = {
   onboardingSlides: ReadonlyArray<{ title: string; subtitle: string }>;
 
   // Health overview card
-  overviewAllClear:       string;
-  overviewNeedsAttention: (n: number) => string;
-  overviewExpiredLabel:   (n: number) => string;
-  overviewSoonLabel:      (n: number) => string;
+  overviewAllClear:     string;
+  overviewExpiredLabel: (n: number) => string;
+  overviewSoonLabel:    (n: number) => string;
 
   // Item detail screen
   detailTypical: (n: number) => string;
@@ -92,6 +92,7 @@ export const STRINGS: Record<Lang, Strings> = {
         if (d === -1) return 'expired yesterday';
         return `expired ${Math.abs(d)} days ago`;
       },
+      overviewNeedsAttention: n => n === 1 ? '1 item needs attention' : `${n} items need attention`,
     },
 
     subscription: {
@@ -111,6 +112,7 @@ export const STRINGS: Record<Lang, Strings> = {
         if (d === -1) return 'overdue by 1 day';
         return `overdue by ${Math.abs(d)} days`;
       },
+      overviewNeedsAttention: n => n === 1 ? '1 subscription needs attention' : `${n} subscriptions need attention`,
     },
 
     delete:    'Delete',
@@ -150,9 +152,8 @@ export const STRINGS: Record<Lang, Strings> = {
       },
     ],
 
-    overviewAllClear:       'All clear',
-    overviewNeedsAttention: n => n === 1 ? '1 needs attention' : `${n} need attention`,
-    overviewExpiredLabel:   n => n === 1 ? '1 expired' : `${n} expired`,
+    overviewAllClear:     'All clear',
+    overviewExpiredLabel: n => n === 1 ? '1 expired' : `${n} expired`,
     overviewSoonLabel:      n => n === 1 ? '1 expiring soon' : `${n} expiring soon`,
 
     detailTypical: n => `Typical shelf life: ${n} days after opening`,
@@ -187,6 +188,7 @@ export const STRINGS: Record<Lang, Strings> = {
         if (d === -1) return 'gestern abgelaufen';
         return `vor ${Math.abs(d)} Tagen abgelaufen`;
       },
+      overviewNeedsAttention: n => n === 1 ? '1 Produkt braucht Aufmerksamkeit' : `${n} Produkte brauchen Aufmerksamkeit`,
     },
 
     subscription: {
@@ -206,6 +208,7 @@ export const STRINGS: Record<Lang, Strings> = {
         if (d === -1) return '1 Tag überfällig';
         return `${Math.abs(d)} Tage überfällig`;
       },
+      overviewNeedsAttention: n => n === 1 ? '1 Abo braucht Aufmerksamkeit' : `${n} Abos brauchen Aufmerksamkeit`,
     },
 
     delete:    'Löschen',
@@ -245,9 +248,8 @@ export const STRINGS: Record<Lang, Strings> = {
       },
     ],
 
-    overviewAllClear:       'Alles ok',
-    overviewNeedsAttention: n => n === 1 ? '1 braucht Aufmerksamkeit' : `${n} brauchen Aufmerksamkeit`,
-    overviewExpiredLabel:   n => n === 1 ? '1 ist abgelaufen' : `${n} sind abgelaufen`,
+    overviewAllClear:     'Alles ok',
+    overviewExpiredLabel: n => n === 1 ? '1 ist abgelaufen' : `${n} sind abgelaufen`,
     overviewSoonLabel:      n => n === 1 ? '1 läuft bald ab' : `${n} laufen bald ab`,
 
     detailTypical: n => `Typische Haltbarkeit: ${n} Tage nach Öffnen`,

@@ -411,15 +411,21 @@ export function ListScreen({ mode }: { mode: Mode }) {
 
   const lookupMatches = useMemo(() => {
     if (!cfg.showLookup || editingId) return [];
-    const q = form.name.toLowerCase();
-    return findItem(form.name).filter(item => item.de.toLowerCase() !== q);
-  }, [form.name, cfg.showLookup, editingId]);
+    const q    = form.name.toLowerCase();
+    const prim = (item: DattlItem) => (lang === 'de' ? item.de : item.en).toLowerCase();
+    return findItem(form.name)
+      .filter(item => prim(item) !== q) // exclude exact match in primary language
+      .filter(item => {
+        if (form.name.length >= 4) return true; // 4+ chars: allow cross-language results
+        return prim(item).startsWith(q) || prim(item).includes(q);
+      });
+  }, [form.name, cfg.showLookup, editingId, lang]);
 
   const applyLookup = useCallback((lookupItem: DattlItem) => {
     setIsDirty(true);
     setForm(prev => ({
       ...prev,
-      name: lookupItem.de,
+      name: lang === 'de' ? lookupItem.de : lookupItem.en,
       date: suggestedExpiryDate(lookupItem, prev.openedOn),
       expirySource: 'lookup',
       lookupItem,
@@ -427,7 +433,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
       longerUsableHint: lookupItem.longerUsableHint,
       longerUsableHintEn: lookupItem.longerUsableHintEn,
     }));
-  }, []);
+  }, [lang]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
@@ -524,7 +530,8 @@ export function ListScreen({ mode }: { mode: Mode }) {
   // Lookup match for the item currently open in the sheet (edit mode only).
   const dattlInfoMatch = useMemo(() => {
     if (!editingId || !cfg.showLookup) return undefined;
-    return DATTL_ITEMS.find(d => d.de.toLowerCase() === form.name.toLowerCase());
+    const q = form.name.toLowerCase();
+    return DATTL_ITEMS.find(d => d.de.toLowerCase() === q || d.en.toLowerCase() === q);
   }, [editingId, form.name, cfg.showLookup]);
 
   function handleDeleteFromModal() {
@@ -580,7 +587,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
               <Text style={[styles.overviewTitle, { color: allClear ? '#4ade80' : COLORS.text }]}>
                 {allClear
                   ? t.overviewAllClear
-                  : t.overviewNeedsAttention(attention)}
+                  : tcfg.overviewNeedsAttention(attention)}
               </Text>
 
               {/* Segmented bar — only red/amber, no grey filler */}
@@ -695,7 +702,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 <Text style={styles.lookupHint}>
                   {form.lookupItem.category === 'bath'
                     ? t.addItemHintBath(humanDuration(form.lookupItem.daysAfterOpening, lang, lang === 'de'))
-                    : t.addItemHint(form.lookupItem.de, humanDuration(form.lookupItem.daysAfterOpening, lang))}
+                    : t.addItemHint(lang === 'de' ? form.lookupItem.de : form.lookupItem.en, humanDuration(form.lookupItem.daysAfterOpening, lang))}
                 </Text>
                 {(form.longerUsableHint || form.longerUsableHintEn) && (
                   <Text style={styles.infoLonger}>
@@ -724,7 +731,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                         onPress={() => applyLookup(item)}
                         style={styles.lookupPill}
                       >
-                        <Text style={styles.lookupPillName}>{item.de}</Text>
+                        <Text style={styles.lookupPillName}>{lang === 'de' ? item.de : item.en}</Text>
                         <Text style={styles.lookupPillDuration}>
                           {formatDuration(item.daysAfterOpening)}
                         </Text>
