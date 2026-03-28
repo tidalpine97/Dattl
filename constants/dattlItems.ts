@@ -181,7 +181,7 @@ export const DATTL_ITEMS: DattlItem[] = [
 
   { de: 'Aftershave', en: 'Aftershave', category: 'bath', daysAfterOpening: 1095 },
 
-  { de: 'Rasierklinge', en: 'Razor Blade', category: 'bath', daysAfterOpening: 30, hint: 'nach erster Nutzung' },
+  { de: 'Rasierklinge', en: 'Razor Blade', category: 'bath', daysAfterOpening: 30, hint: 'ab erster Nutzung' },
 
   { de: 'Zahnpasta', en: 'Toothpaste', category: 'bath', daysAfterOpening: 365 },
 

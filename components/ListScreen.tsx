@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  Alert,
   FlatList,
   Image,
   Keyboard,
@@ -22,7 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { type Item, loadItems, saveItems } from '@/utils/storage';
 import { DATE_FORMAT, formatDate, getDaysUntilExpiry, getExpiryLabel, getSubscriptionLabel } from '@/utils/dates';
 import { useFavorites } from '@/hooks/use-favorites';
-import { type DattlItem, findItem, suggestedExpiryDate } from '@/constants/dattlItems';
+import { type DattlItem, DATTL_ITEMS, findItem, suggestedExpiryDate } from '@/constants/dattlItems';
 import { useLanguage } from '@/context/language';
 import { STRINGS } from '@/constants/i18n';
 import { syncWidgetItems } from '@/utils/sharedStorage';
@@ -165,6 +166,29 @@ function formatDuration(days: number): string {
   const months = Math.round(days / 30);
   if (months < 24) return `${months}mo`;
   return `${Math.round(months / 12)}yr`;
+}
+
+// Human-readable duration for hint sentences.
+// dative=true uses German dative plural forms (needed after "von": Monaten, Tagen, Jahren).
+function humanDuration(days: number, lang: string, dative = false): string {
+  if (days < 14) return lang === 'de' ? `${days} ${dative ? 'Tagen' : 'Tage'}` : `${days} days`;
+  if (days < 60) {
+    const w = Math.round(days / 7);
+    // Woche / Wochen are the same in dative
+    return lang === 'de'
+      ? `${w} ${w === 1 ? 'Woche' : 'Wochen'}`
+      : `${w} ${w === 1 ? 'week' : 'weeks'}`;
+  }
+  if (days < 730) {
+    const m = Math.round(days / 30);
+    return lang === 'de'
+      ? `${m} ${m === 1 ? 'Monat' : dative ? 'Monaten' : 'Monate'}`
+      : `${m} ${m === 1 ? 'month' : 'months'}`;
+  }
+  const y = Math.round(days / 365);
+  return lang === 'de'
+    ? `${y} ${y === 1 ? 'Jahr' : dative ? 'Jahren' : 'Jahre'}`
+    : `${y} ${y === 1 ? 'year' : 'years'}`;
 }
 
 // Returns d if it is a valid Date, otherwise falls back to today.
@@ -474,9 +498,11 @@ export function ListScreen({ mode }: { mode: Mode }) {
               )}
             </View>
             <View style={styles.rightSide}>
-              <Text style={[styles.statusLabel, getStatusLabelStyle(daysLeft)]}>
-                {tcfg.statusLabel(daysLeft)}
-              </Text>
+              {(daysLeft < 0 || daysLeft <= 7) && (
+                <Text style={[styles.statusLabel, getStatusLabelStyle(daysLeft)]}>
+                  {tcfg.statusLabel(daysLeft)}
+                </Text>
+              )}
               <Pressable
                 onPress={() => toggleFavorite(item.name)}
                 style={styles.starBtn}
@@ -493,7 +519,33 @@ export function ListScreen({ mode }: { mode: Mode }) {
         </Swipeable>
       </View>
     );
-  }, [deleteItem, openModal, toggleFavorite, favorites, cfg, t, tcfg]);
+  }, [deleteItem, openModal, toggleFavorite, favorites, t, tcfg]);
+
+  // Lookup match for the item currently open in the sheet (edit mode only).
+  const dattlInfoMatch = useMemo(() => {
+    if (!editingId || !cfg.showLookup) return undefined;
+    return DATTL_ITEMS.find(d => d.de.toLowerCase() === form.name.toLowerCase());
+  }, [editingId, form.name, cfg.showLookup]);
+
+  function handleDeleteFromModal() {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      lang === 'de' ? 'Löschen?' : 'Delete?',
+      lang === 'de' ? 'Diesen Eintrag wirklich löschen?' : 'Delete this item?',
+      [
+        { text: t.cancel, style: 'cancel' },
+        {
+          text: t.delete,
+          style: 'destructive',
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            if (editingId) deleteItem(editingId);
+            setModalVisible(false);
+          },
+        },
+      ],
+    );
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -505,10 +557,14 @@ export function ListScreen({ mode }: { mode: Mode }) {
 
       {/* ── Health overview card ────────────────────────────────────────────── */}
       {sortedItems.length > 0 && (() => {
-        const { expired, soon, ok, attention } = overview;
-        const allClear   = attention === 0;
-        const badgeColor = expired > 0 ? COLORS.expired : soon > 0 ? COLORS.warning : '#4ade80';
-        const total      = expired + soon + ok;
+        const { expired, soon, attention } = overview;
+        const allClear = attention === 0;
+        // Blend ring color: amber when all "soon", red when all expired, interpolated when mixed
+        const ratio      = attention > 0 ? expired / attention : 0;
+        const r = Math.round(245 + (224 - 245) * ratio);
+        const g = Math.round(197 + ( 82 - 197) * ratio);
+        const b = Math.round( 66 + ( 82 -  66) * ratio);
+        const badgeColor = allClear ? '#4ade80' : `rgb(${r},${g},${b})`;
 
         return (
           <View style={styles.overviewCard}>
@@ -527,7 +583,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   : t.overviewNeedsAttention(attention)}
               </Text>
 
-              {/* Segmented bar */}
+              {/* Segmented bar — only red/amber, no grey filler */}
               <View style={styles.overviewBar}>
                 {expired > 0 && (
                   <View style={[styles.overviewSeg, { flex: expired, backgroundColor: COLORS.expired }]} />
@@ -535,11 +591,8 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 {soon > 0 && (
                   <View style={[styles.overviewSeg, { flex: soon, backgroundColor: COLORS.warning }]} />
                 )}
-                {ok > 0 && (
-                  <View style={[styles.overviewSeg, { flex: ok, backgroundColor: '#2e2e2e' }]} />
-                )}
-                {total === 0 && (
-                  <View style={[styles.overviewSeg, { flex: 1, backgroundColor: '#2e2e2e' }]} />
+                {allClear && (
+                  <View style={[styles.overviewSeg, { flex: 1, backgroundColor: '#4ade8030' }]} />
                 )}
               </View>
 
@@ -547,8 +600,8 @@ export function ListScreen({ mode }: { mode: Mode }) {
               {!allClear && (
                 <Text style={styles.overviewMeta}>
                   {[
-                    expired > 0 ? `${expired} ${t.overviewExpiredLabel}` : '',
-                    soon    > 0 ? `${soon} ${t.overviewSoonLabel}`     : '',
+                    expired > 0 ? t.overviewExpiredLabel(expired) : '',
+                    soon    > 0 ? t.overviewSoonLabel(soon)       : '',
                   ].filter(Boolean).join('  ·  ')}
                 </Text>
               )}
@@ -618,9 +671,38 @@ export function ListScreen({ mode }: { mode: Mode }) {
               }}
             />
 
-            {/* ── Lookup hint ─────────────────────────────────────────────── */}
-            {form.lookupItem?.hint && form.activePicker === false && (
-              <Text style={styles.lookupHint}>{form.lookupItem.hint}</Text>
+            {/* ── Item info card (edit mode only) ─────────────────────────
+                Shows lookup data for the open item — typical duration, hint,
+                and longerUsable note. Hidden while a date picker is active.  */}
+            {editingId && form.activePicker === false && (dattlInfoMatch || form.longerUsableHint || form.longerUsableHintEn) && (
+              <View style={styles.infoCard}>
+                {dattlInfoMatch && (
+                  <Text style={styles.infoTypical}>{t.detailTypical(dattlInfoMatch.daysAfterOpening)}</Text>
+                )}
+                {(form.longerUsableHint || form.longerUsableHintEn) && (
+                  <Text style={styles.infoLonger}>
+                    ⓘ {lang === 'de' ? form.longerUsableHint : (form.longerUsableHintEn ?? form.longerUsableHint)}
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* ── Add-item hint ────────────────────────────────────────────
+                Shown after selecting a suggestion pill. Displays a readable
+                shelf-life sentence and the longerUsable note if present.    */}
+            {!editingId && form.lookupItem && form.activePicker === false && (
+              <>
+                <Text style={styles.lookupHint}>
+                  {form.lookupItem.category === 'bath'
+                    ? t.addItemHintBath(humanDuration(form.lookupItem.daysAfterOpening, lang, lang === 'de'))
+                    : t.addItemHint(form.lookupItem.de, humanDuration(form.lookupItem.daysAfterOpening, lang))}
+                </Text>
+                {(form.longerUsableHint || form.longerUsableHintEn) && (
+                  <Text style={styles.infoLonger}>
+                    ⓘ {lang === 'de' ? form.longerUsableHint : (form.longerUsableHintEn ?? form.longerUsableHint)}
+                  </Text>
+                )}
+              </>
             )}
 
             {/* ── Suggestions (items mode only) ────────────────────────────
@@ -663,7 +745,15 @@ export function ListScreen({ mode }: { mode: Mode }) {
                       {modalSuggestions.map(({ name, isFav }) => (
                         <Pressable
                           key={name}
-                          onPress={() => { setIsDirty(true); setForm(prev => ({ ...prev, name })); }}
+                          onPress={() => {
+                            const match = DATTL_ITEMS.find(d => d.de.toLowerCase() === name.toLowerCase());
+                            if (match) {
+                              applyLookup(match);
+                            } else {
+                              setIsDirty(true);
+                              setForm(prev => ({ ...prev, name }));
+                            }
+                          }}
                           style={styles.quickAddPill}
                         >
                           {isFav && <Text style={styles.quickAddStar}>★</Text>}
@@ -834,6 +924,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   <Text style={styles.saveText}>{t.save}</Text>
                 </Pressable>
               </View>
+            )}
+
+            {/* Delete link — only shown for existing items, not while picker is open */}
+            {editingId && form.activePicker === false && !showSuccess && (
+              <Pressable onPress={handleDeleteFromModal} style={styles.deleteLink}>
+                <Text style={styles.deleteLinkText}>{t.delete}</Text>
+              </Pressable>
             )}
           </View>
         </KeyboardAvoidingView>
@@ -1127,6 +1224,23 @@ const styles = StyleSheet.create({
   cancelText: { fontSize: 16, color: COLORS.textMuted },
   saveBtn: { ...btnBase, backgroundColor: COLORS.accent },
   saveText: { fontSize: 16, color: '#000000', fontWeight: '700' },
+
+  // ── Item info card (edit mode) ─────────────────────────────────────────────
+  infoCard: {
+    backgroundColor: COLORS.bg,
+    borderRadius: 10,
+    padding: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  infoTypical: { fontSize: 13, color: COLORS.text, fontWeight: '600' },
+  infoHint:    { fontSize: 12, color: COLORS.textMuted },
+  infoLonger:  { fontSize: 12, color: COLORS.accent },
+
+  // ── Delete link ────────────────────────────────────────────────────────────
+  deleteLink: { alignItems: 'center', paddingVertical: 4 },
+  deleteLinkText: { fontSize: 14, color: '#E05252' },
 
   // ── Save success confirmation ──────────────────────────────────────────────
   successBanner: {

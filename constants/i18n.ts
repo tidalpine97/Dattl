@@ -1,7 +1,7 @@
 import type { Lang } from '@/context/language';
 
 // Per-mode translated strings (shared shape between item and subscription)
-type ModeStrings = {
+export type ModeStrings = {
   openedOnLabel: string;
   expiryLabel: string;
   addButton: string;
@@ -51,8 +51,16 @@ export type Strings = {
   // Health overview card
   overviewAllClear:       string;
   overviewNeedsAttention: (n: number) => string;
-  overviewExpiredLabel:   string;
-  overviewSoonLabel:      string;
+  overviewExpiredLabel:   (n: number) => string;
+  overviewSoonLabel:      (n: number) => string;
+
+  // Item detail screen
+  detailTypical: (n: number) => string;
+  detailEdit:    string;
+
+  // Add-item lookup hint (shown after selecting a suggestion pill)
+  addItemHint:     (name: string, duration: string) => string;
+  addItemHintBath: (duration: string) => string;
 
   // Settings
   languageLabel: string;
@@ -133,6 +141,10 @@ export const STRINGS: Record<Lang, Strings> = {
         subtitle: 'Type a name and Dattl suggests the right expiry automatically. Tap to fill it in.',
       },
       {
+        title:    'Mark your staples',
+        subtitle: 'Star the items you buy regularly. They appear at the top when you add something new — one tap to refill.',
+      },
+      {
         title:    'Never miss a date',
         subtitle: 'Allow notifications and Dattl will remind you before things expire so you can act in time.',
       },
@@ -140,8 +152,14 @@ export const STRINGS: Record<Lang, Strings> = {
 
     overviewAllClear:       'All clear',
     overviewNeedsAttention: n => n === 1 ? '1 needs attention' : `${n} need attention`,
-    overviewExpiredLabel:   'expired',
-    overviewSoonLabel:      'expiring soon',
+    overviewExpiredLabel:   n => n === 1 ? '1 expired' : `${n} expired`,
+    overviewSoonLabel:      n => n === 1 ? '1 expiring soon' : `${n} expiring soon`,
+
+    detailTypical: n => `Typical shelf life: ${n} days after opening`,
+    detailEdit:    'Edit',
+
+    addItemHint:     (name, duration) => `Typical shelf life for ${name} is ${duration} after opening.`,
+    addItemHintBath: duration => `Best used within ${duration} of opening.`,
 
     languageLabel: 'Language',
     locale:        'en-US',
@@ -218,6 +236,10 @@ export const STRINGS: Record<Lang, Strings> = {
         subtitle: 'Gib einen Namen ein und Dattl schlägt das Ablaufdatum automatisch vor. Tippe zum Ausfüllen.',
       },
       {
+        title:    'Deine Stammprodukte',
+        subtitle: 'Markiere Produkte mit einem Stern, die du regelmäßig kaufst. Sie erscheinen beim Hinzufügen ganz oben.',
+      },
+      {
         title:    'Nie wieder verpassen',
         subtitle: 'Erlaube Benachrichtigungen und Dattl erinnert dich rechtzeitig bevor etwas abläuft.',
       },
@@ -225,8 +247,14 @@ export const STRINGS: Record<Lang, Strings> = {
 
     overviewAllClear:       'Alles ok',
     overviewNeedsAttention: n => n === 1 ? '1 braucht Aufmerksamkeit' : `${n} brauchen Aufmerksamkeit`,
-    overviewExpiredLabel:   'abgelaufen',
-    overviewSoonLabel:      'läuft bald ab',
+    overviewExpiredLabel:   n => n === 1 ? '1 ist abgelaufen' : `${n} sind abgelaufen`,
+    overviewSoonLabel:      n => n === 1 ? '1 läuft bald ab' : `${n} laufen bald ab`,
+
+    detailTypical: n => `Typische Haltbarkeit: ${n} Tage nach Öffnen`,
+    detailEdit:    'Bearbeiten',
+
+    addItemHint:     (name, duration) => `Typische Haltbarkeit von ${name}: ${duration} nach Öffnen.`,
+    addItemHintBath: duration => `Innerhalb von ${duration} nach dem Öffnen aufbrauchen.`,
 
     languageLabel: 'Sprache',
     locale:        'de-AT',

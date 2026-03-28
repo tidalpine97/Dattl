@@ -136,7 +136,7 @@ export default Sentry.wrap(function RootLayout() {
   return (
     // GestureHandlerRootView must wrap the entire app for Swipeable (and any
     // other gesture-handler components) to work. flex:1 ensures it fills the screen.
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
       <LanguageProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
 

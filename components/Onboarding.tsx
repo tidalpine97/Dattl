@@ -19,6 +19,7 @@ import { requestNotificationPermission } from '@/utils/notifications';
 const SLIDE_ICONS: Array<keyof typeof Ionicons.glyphMap> = [
   'time-outline',
   'flash-outline',
+  'star-outline',
   'notifications-outline',
 ];
 
