@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Alert,
-  FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -10,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 
-import { type Item, loadItems, saveItems } from '@/utils/storage';
+import { type Item, type ItemCategory, loadItems, saveItems } from '@/utils/storage';
 import { DATE_FORMAT, formatDate, getDaysUntilExpiry, getExpiryLabel, getSubscriptionLabel } from '@/utils/dates';
 import { useFavorites } from '@/hooks/use-favorites';
 import { type DattlItem, DATTL_ITEMS, findItem, suggestedExpiryDate } from '@/constants/dattlItems';
@@ -31,8 +31,7 @@ import {
   cancelNotification,
   cancelSubscriptionNotifications,
   requestNotificationPermission,
-  scheduleDebugNotification,
-  scheduleExpiryNotification,
+  rescheduleAllItemNotifications,
   scheduleSubscriptionNotifications,
 } from '@/utils/notifications';
 
@@ -52,6 +51,35 @@ const COLORS = {
 
 const PICKER_INLINE = Platform.OS === 'ios';
 const PICKER_MIN_DATE = new Date(2000, 0, 1);
+
+// ─── Category config ───────────────────────────────────────────────────────────
+
+const CATEGORY_ORDER: ItemCategory[] = [
+  'fridge', 'freezer', 'pantry', 'medicine', 'cosmetics', 'household', 'other',
+];
+
+const CATEGORY_EMOJI: Record<ItemCategory, string> = {
+  fridge:    '🧊',
+  freezer:   '❄️',
+  pantry:    '🥫',
+  medicine:  '💊',
+  cosmetics: '💄',
+  household: '🧹',
+  other:     '📦',
+};
+
+const CATEGORY_LABEL: Record<ItemCategory, { de: string; en: string }> = {
+  fridge:    { de: 'Kühlschrank', en: 'Fridge' },
+  freezer:   { de: 'Tiefkühler',  en: 'Freezer' },
+  pantry:    { de: 'Vorrat',      en: 'Pantry' },
+  medicine:  { de: 'Medizin',     en: 'Medicine' },
+  cosmetics: { de: 'Kosmetik',    en: 'Cosmetics' },
+  household: { de: 'Haushalt',    en: 'Household' },
+  other:     { de: 'Sonstiges',   en: 'Other' },
+};
+
+// Food categories use the food-style lookup hint; others use the non-perishable hint.
+const FOOD_CATEGORIES = new Set<ItemCategory>(['fridge', 'freezer', 'pantry']);
 
 // ─── Mode config ──────────────────────────────────────────────────────────────
 
@@ -108,13 +136,15 @@ type FormState = {
   name: string;
   date: Date;
   openedOn: Date;
-  originalOpenedOn: string; // ISO — openedOn when the modal was opened; used for the save intercept
+  originalOpenedOn: string;
   activePicker: ActivePicker;
   expirySource: 'lookup' | 'manual';
   lookupItem?: DattlItem;
   lookupOpenedOn?: string;
-  longerUsableHint?: string;   // persisted from lookup; cleared on manual name change
+  longerUsableHint?: string;
   longerUsableHintEn?: string;
+  category: ItemCategory;
+  categoryManuallySet: boolean;
 };
 
 function freshForm(): FormState {
@@ -126,6 +156,8 @@ function freshForm(): FormState {
     originalOpenedOn: now.toISOString(),
     activePicker: false,
     expirySource: 'manual',
+    category: 'other',
+    categoryManuallySet: false,
   };
 }
 
@@ -168,13 +200,10 @@ function formatDuration(days: number): string {
   return `${Math.round(months / 12)}yr`;
 }
 
-// Human-readable duration for hint sentences.
-// dative=true uses German dative plural forms (needed after "von": Monaten, Tagen, Jahren).
 function humanDuration(days: number, lang: string, dative = false): string {
   if (days < 14) return lang === 'de' ? `${days} ${dative ? 'Tagen' : 'Tage'}` : `${days} days`;
   if (days < 60) {
     const w = Math.round(days / 7);
-    // Woche / Wochen are the same in dative
     return lang === 'de'
       ? `${w} ${w === 1 ? 'Woche' : 'Wochen'}`
       : `${w} ${w === 1 ? 'week' : 'weeks'}`;
@@ -191,8 +220,6 @@ function humanDuration(days: number, lang: string, dative = false): string {
     : `${y} ${y === 1 ? 'year' : 'years'}`;
 }
 
-// Returns d if it is a valid Date, otherwise falls back to today.
-// Prevents DateTimePicker from receiving null/undefined/NaN.
 function safeDate(d: Date | null | undefined): Date {
   return d instanceof Date && !isNaN(d.getTime()) ? d : new Date();
 }
@@ -212,7 +239,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
   const [form, setForm] = useState<FormState>(freshForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const hasLoaded    = useRef(false);
-  const maxPickerDate = useRef(new Date()).current; // stable reference — avoids native crash from recreating Date every render
+  const maxPickerDate = useRef(new Date()).current;
 
   const { favorites, toggleFavorite } = useFavorites(cfg.favoritesKey);
 
@@ -228,25 +255,20 @@ export function ListScreen({ mode }: { mode: Mode }) {
   }, [cfg.storageKey]);
 
   useEffect(() => {
-    requestNotificationPermission()
-      .then(granted => {
-        if (granted) return scheduleDebugNotification();
-      })
-      .catch(e => console.error('Notification setup failed:', e));
+    // Request permission on mount; for item mode, initial reschedule happens
+    // in the items effect once items are loaded.
+    requestNotificationPermission().catch(e => console.error('Notification permission failed:', e));
   }, []);
 
   useEffect(() => {
     if (!hasLoaded.current) return;
     saveItems(items, cfg.storageKey).catch(e => console.error('Failed to save items:', e));
-    // Keep the widget in sync — only the items list drives the widget, not subscriptions.
-    if (mode === 'item') syncWidgetItems(items);
+    if (mode === 'item') {
+      syncWidgetItems(items);
+      rescheduleAllItemNotifications(items).catch(e => console.error('Notification reschedule failed:', e));
+    }
   }, [items, cfg.storageKey, mode]);
 
-  // Picker is closed via TextInput onFocus (see below) rather than a keyboardWillShow
-  // listener, because the listener also fires when the iOS inline picker opens its own
-  // year-entry keyboard — that would unmount the picker mid-interaction and crash.
-
-  // Reset success banner each time the modal opens.
   useEffect(() => {
     if (modalVisible) setShowSuccess(false);
   }, [modalVisible]);
@@ -262,13 +284,12 @@ export function ListScreen({ mode }: { mode: Mode }) {
   }
 
   async function scheduleItemNotifs(partial: Item): Promise<Partial<Item>> {
-    if (mode === 'item') {
-      const id = await scheduleExpiryNotification(partial).catch(() => null);
-      return { notificationId: id ?? undefined };
-    } else {
+    if (mode === 'subscription') {
       const ids = await scheduleSubscriptionNotifications(partial).catch(() => []);
       return { notificationIds: ids.length ? ids : undefined };
     }
+    // Item mode: batch reschedule is handled by the items useEffect; no per-item ID needed.
+    return {};
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -294,11 +315,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
         name: item.name,
         date:             safeExpiry,
         openedOn:         safeOpened,
-        originalOpenedOn: safeOpened.toISOString(), // snapshot for save intercept
+        originalOpenedOn: safeOpened.toISOString(),
         activePicker: false,
         expirySource: 'manual',
         longerUsableHint: item.longerUsableHint,
         longerUsableHintEn: item.longerUsableHintEn,
+        category: item.category ?? 'other',
+        categoryManuallySet: true, // treat existing category as intentional
       });
     } else {
       setEditingId(null);
@@ -308,19 +331,15 @@ export function ListScreen({ mode }: { mode: Mode }) {
     setModalVisible(true);
   }, []);
 
-  // Core save — accepts an optional expiry override (used by the Yes prompt handler).
-  // fromPrompt=true means a prompt Yes/No triggered this: never close the modal.
   async function doSave(overrideExpiry?: Date, fromPrompt = false) {
     const raw = form.name.trim();
     if (!raw) return;
 
     const name = raw.charAt(0).toUpperCase() + raw.slice(1);
-    // safeDate guard prevents RangeError from toISOString() on an invalid Date.
     const savedExpiry = safeDate(overrideExpiry ?? form.date);
     const expiryDate  = savedExpiry.toISOString();
     const dateAdded   = form.openedOn.toISOString();
 
-    // Sync helper — clears the recalc prompt and keeps the form consistent.
     const syncForm = (currentOpenedOn: Date) =>
       setForm(prev => ({
         ...prev,
@@ -336,41 +355,50 @@ export function ListScreen({ mode }: { mode: Mode }) {
       setTimeout(() => setShowSuccess(false), 1500);
     };
 
+    const category = form.category;
+
     if (editingId) {
       const existing = items.find(i => i.id === editingId);
       if (existing) {
         await cancelItemNotifs(existing).catch(e => console.error('Failed to cancel notification on edit:', e));
       }
       const notifFields = await scheduleItemNotifs({ id: editingId, name, expiryDate }).catch(() => ({}));
-      const longerUsableHint = form.longerUsableHint;
-      const longerUsableHintEn = form.longerUsableHintEn;
       setItems(prev => prev.map(item =>
-        item.id === editingId ? { ...item, name, expiryDate, dateAdded, longerUsableHint, longerUsableHintEn, ...notifFields } : item
+        item.id === editingId
+          ? {
+              ...item, name, expiryDate, dateAdded, category,
+              longerUsableHint: form.longerUsableHint,
+              longerUsableHintEn: form.longerUsableHintEn,
+              ...notifFields,
+            }
+          : item
       ));
       syncForm(form.openedOn);
       showBanner();
     } else {
       const id = Date.now().toString();
       const notifFields = await scheduleItemNotifs({ id, name, expiryDate }).catch(() => ({}));
-      const longerUsableHint = form.longerUsableHint;
-      const longerUsableHintEn = form.longerUsableHintEn;
-      setItems(prev => [...prev, { id, name, expiryDate, dateAdded, longerUsableHint, longerUsableHintEn, ...notifFields }]);
+      setItems(prev => [
+        ...prev,
+        {
+          id, name, expiryDate, dateAdded, category,
+          longerUsableHint: form.longerUsableHint,
+          longerUsableHintEn: form.longerUsableHintEn,
+          ...notifFields,
+        },
+      ]);
 
       if (fromPrompt) {
-        // Prompt was answered for a new item: stay open (switch to edit mode so a
-        // second Save updates rather than duplicating).
         setEditingId(id);
         syncForm(form.openedOn);
         showBanner();
       } else {
-        // Normal new-item save: close immediately.
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setModalVisible(false);
       }
     }
   }
 
-  // Save button handler — intercepts when openedOn changed from its value when the modal opened.
   async function saveItem() {
     if (!form.name.trim()) return;
 
@@ -378,7 +406,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
       form.openedOn.toDateString() !== new Date(form.originalOpenedOn).toDateString();
 
     if (openedOnChanged) {
-      // Surface the recalc prompt; don't save yet.
       setForm(prev => ({ ...prev, activePicker: false }));
       return;
     }
@@ -386,7 +413,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
     await doSave();
   }
 
-  // Prompt: Yes — recalculate expiry from new openedOn, then save immediately.
   async function handlePromptYes() {
     let newExpiry: Date;
     if (form.lookupItem) {
@@ -394,7 +420,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
     } else {
       const origMs = new Date(form.originalOpenedOn).getTime();
       const durMs  = form.date.getTime() - origMs;
-      // Guard: if either value is NaN fall back to current expiry unchanged.
       newExpiry = isNaN(origMs) || isNaN(durMs)
         ? safeDate(form.date)
         : new Date(form.openedOn.getTime() + Math.max(0, durMs));
@@ -402,7 +427,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
     await doSave(newExpiry, true);
   }
 
-  // Prompt: No — keep current expiry and save immediately.
   async function handlePromptNo() {
     await doSave(undefined, true);
   }
@@ -414,9 +438,9 @@ export function ListScreen({ mode }: { mode: Mode }) {
     const q    = form.name.toLowerCase();
     const prim = (item: DattlItem) => (lang === 'de' ? item.de : item.en).toLowerCase();
     return findItem(form.name)
-      .filter(item => prim(item) !== q) // exclude exact match in primary language
+      .filter(item => prim(item) !== q)
       .filter(item => {
-        if (form.name.length >= 4) return true; // 4+ chars: allow cross-language results
+        if (form.name.length >= 4) return true;
         return prim(item).startsWith(q) || prim(item).includes(q);
       });
   }, [form.name, cfg.showLookup, editingId, lang]);
@@ -432,12 +456,28 @@ export function ListScreen({ mode }: { mode: Mode }) {
       lookupOpenedOn: prev.openedOn.toISOString(),
       longerUsableHint: lookupItem.longerUsableHint,
       longerUsableHintEn: lookupItem.longerUsableHintEn,
+      // Auto-assign category only if user hasn't manually picked one
+      category: prev.categoryManuallySet ? prev.category : lookupItem.category,
     }));
   }, [lang]);
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
   const sortedItems = useMemo(() => sortItems(items), [items]);
+
+  const sections = useMemo(() => {
+    if (mode !== 'item') {
+      if (sortedItems.length === 0) return [];
+      return [{ key: 'all' as ItemCategory, title: '', data: sortedItems }];
+    }
+    return CATEGORY_ORDER
+      .map(cat => ({
+        key: cat,
+        title: `${CATEGORY_EMOJI[cat]} ${CATEGORY_LABEL[cat][lang]}`,
+        data: sortedItems.filter(i => (i.category ?? 'other') === cat),
+      }))
+      .filter(s => s.data.length > 0);
+  }, [sortedItems, mode, lang]);
 
   // ── Health overview ─────────────────────────────────────────────────────────
   const overview = useMemo(() => {
@@ -525,9 +565,17 @@ export function ListScreen({ mode }: { mode: Mode }) {
         </Swipeable>
       </View>
     );
-  }, [deleteItem, openModal, toggleFavorite, favorites, t, tcfg]);
+  }, [deleteItem, openModal, toggleFavorite, favorites, t, tcfg, lang]);
 
-  // Lookup match for the item currently open in the sheet (edit mode only).
+  const renderSectionHeader = useCallback(({ section }: { section: { title: string } }) => {
+    if (!section.title) return null;
+    return (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeaderText}>{section.title}</Text>
+      </View>
+    );
+  }, []);
+
   const dattlInfoMatch = useMemo(() => {
     if (!editingId || !cfg.showLookup) return undefined;
     const q = form.name.toLowerCase();
@@ -554,6 +602,55 @@ export function ListScreen({ mode }: { mode: Mode }) {
     );
   }
 
+  // ── Health overview card ───────────────────────────────────────────────────
+
+  const overviewCard = useMemo(() => {
+    if (sortedItems.length === 0) return null;
+    const { expired, soon, attention } = overview;
+    const allClear = attention === 0;
+    const ratio      = attention > 0 ? expired / attention : 0;
+    const r = Math.round(245 + (224 - 245) * ratio);
+    const g = Math.round(197 + ( 82 - 197) * ratio);
+    const b = Math.round( 66 + ( 82 -  66) * ratio);
+    const badgeColor = allClear ? '#4ade80' : `rgb(${r},${g},${b})`;
+
+    return (
+      <View style={styles.overviewCard}>
+        <View style={[styles.overviewBadge, { borderColor: badgeColor }]}>
+          <Text style={[styles.overviewBadgeText, { color: badgeColor }]}>
+            {allClear ? '✓' : attention}
+          </Text>
+        </View>
+        <View style={styles.overviewContent}>
+          <Text style={[styles.overviewTitle, { color: allClear ? '#4ade80' : COLORS.text }]}>
+            {allClear
+              ? t.overviewAllClear
+              : tcfg.overviewNeedsAttention(attention)}
+          </Text>
+          <View style={styles.overviewBar}>
+            {expired > 0 && (
+              <View style={[styles.overviewSeg, { flex: expired, backgroundColor: COLORS.expired }]} />
+            )}
+            {soon > 0 && (
+              <View style={[styles.overviewSeg, { flex: soon, backgroundColor: COLORS.warning }]} />
+            )}
+            {allClear && (
+              <View style={[styles.overviewSeg, { flex: 1, backgroundColor: '#4ade8030' }]} />
+            )}
+          </View>
+          {!allClear && (
+            <Text style={styles.overviewMeta}>
+              {[
+                expired > 0 ? t.overviewExpiredLabel(expired) : '',
+                soon    > 0 ? t.overviewSoonLabel(soon)       : '',
+              ].filter(Boolean).join('  ·  ')}
+            </Text>
+          )}
+        </View>
+      </View>
+    );
+  }, [overview, sortedItems.length, t, tcfg]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const isTyping = form.name.trim().length > 0;
@@ -562,66 +659,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
     <View style={styles.container}>
       <Text style={styles.header}>Dattl</Text>
 
-      {/* ── Health overview card ────────────────────────────────────────────── */}
-      {sortedItems.length > 0 && (() => {
-        const { expired, soon, attention } = overview;
-        const allClear = attention === 0;
-        // Blend ring color: amber when all "soon", red when all expired, interpolated when mixed
-        const ratio      = attention > 0 ? expired / attention : 0;
-        const r = Math.round(245 + (224 - 245) * ratio);
-        const g = Math.round(197 + ( 82 - 197) * ratio);
-        const b = Math.round( 66 + ( 82 -  66) * ratio);
-        const badgeColor = allClear ? '#4ade80' : `rgb(${r},${g},${b})`;
-
-        return (
-          <View style={styles.overviewCard}>
-            {/* Circular badge (ring gauge) */}
-            <View style={[styles.overviewBadge, { borderColor: badgeColor }]}>
-              <Text style={[styles.overviewBadgeText, { color: badgeColor }]}>
-                {allClear ? '✓' : attention}
-              </Text>
-            </View>
-
-            {/* Right side */}
-            <View style={styles.overviewContent}>
-              <Text style={[styles.overviewTitle, { color: allClear ? '#4ade80' : COLORS.text }]}>
-                {allClear
-                  ? t.overviewAllClear
-                  : tcfg.overviewNeedsAttention(attention)}
-              </Text>
-
-              {/* Segmented bar — only red/amber, no grey filler */}
-              <View style={styles.overviewBar}>
-                {expired > 0 && (
-                  <View style={[styles.overviewSeg, { flex: expired, backgroundColor: COLORS.expired }]} />
-                )}
-                {soon > 0 && (
-                  <View style={[styles.overviewSeg, { flex: soon, backgroundColor: COLORS.warning }]} />
-                )}
-                {allClear && (
-                  <View style={[styles.overviewSeg, { flex: 1, backgroundColor: '#4ade8030' }]} />
-                )}
-              </View>
-
-              {/* Meta label */}
-              {!allClear && (
-                <Text style={styles.overviewMeta}>
-                  {[
-                    expired > 0 ? t.overviewExpiredLabel(expired) : '',
-                    soon    > 0 ? t.overviewSoonLabel(soon)       : '',
-                  ].filter(Boolean).join('  ·  ')}
-                </Text>
-              )}
-            </View>
-          </View>
-        );
-      })()}
-
-      <FlatList
-        data={sortedItems}
+      <SectionList
+        sections={sections}
         keyExtractor={item => item.id}
         renderItem={renderItem}
-        contentContainerStyle={sortedItems.length === 0 ? styles.emptyContainer : undefined}
+        renderSectionHeader={renderSectionHeader}
+        ListHeaderComponent={overviewCard}
+        contentContainerStyle={sections.length === 0 ? styles.emptyContainer : undefined}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Image
@@ -632,6 +676,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
             <Text style={styles.emptySubtitle}>{tcfg.emptySubtitle}</Text>
           </View>
         }
+        stickySectionHeadersEnabled={false}
       />
 
       <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 8 }]}>
@@ -678,9 +723,37 @@ export function ListScreen({ mode }: { mode: Mode }) {
               }}
             />
 
-            {/* ── Item info card (edit mode only) ─────────────────────────
-                Shows lookup data for the open item — typical duration, hint,
-                and longerUsable note. Hidden while a date picker is active.  */}
+            {/* ── Category picker (items mode only) ───────────────────────── */}
+            {mode === 'item' && form.activePicker === false && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.categoryRow}
+              >
+                {CATEGORY_ORDER.map(cat => {
+                  const active = form.category === cat;
+                  return (
+                    <Pressable
+                      key={cat}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setIsDirty(true);
+                        setForm(prev => ({ ...prev, category: cat, categoryManuallySet: true }));
+                      }}
+                      style={[styles.categoryPill, active && styles.categoryPillActive]}
+                    >
+                      <Text style={styles.categoryPillEmoji}>{CATEGORY_EMOJI[cat]}</Text>
+                      <Text style={[styles.categoryPillLabel, active && styles.categoryPillLabelActive]}>
+                        {CATEGORY_LABEL[cat][lang]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            {/* ── Item info card (edit mode only) ─────────────────────────── */}
             {editingId && form.activePicker === false && (dattlInfoMatch || form.longerUsableHint || form.longerUsableHintEn) && (
               <View style={styles.infoCard}>
                 {dattlInfoMatch && (
@@ -694,15 +767,13 @@ export function ListScreen({ mode }: { mode: Mode }) {
               </View>
             )}
 
-            {/* ── Add-item hint ────────────────────────────────────────────
-                Shown after selecting a suggestion pill. Displays a readable
-                shelf-life sentence and the longerUsable note if present.    */}
+            {/* ── Add-item hint ─────────────────────────────────────────────── */}
             {!editingId && form.lookupItem && form.activePicker === false && (
               <>
                 <Text style={styles.lookupHint}>
-                  {form.lookupItem.category === 'bath'
-                    ? t.addItemHintBath(humanDuration(form.lookupItem.daysAfterOpening, lang, lang === 'de'))
-                    : t.addItemHint(lang === 'de' ? form.lookupItem.de : form.lookupItem.en, humanDuration(form.lookupItem.daysAfterOpening, lang))}
+                  {FOOD_CATEGORIES.has(form.lookupItem.category)
+                    ? t.addItemHint(lang === 'de' ? form.lookupItem.de : form.lookupItem.en, humanDuration(form.lookupItem.daysAfterOpening, lang))
+                    : t.addItemHintBath(humanDuration(form.lookupItem.daysAfterOpening, lang, lang === 'de'))}
                 </Text>
                 {(form.longerUsableHint || form.longerUsableHintEn) && (
                   <Text style={styles.infoLonger}>
@@ -712,10 +783,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
               </>
             )}
 
-            {/* ── Suggestions (items mode only) ────────────────────────────
-                When typing → lookup matches.
-                When empty  → favorites / recent Quick Add pills.
-                Hidden once a calendar is visible.                       */}
+            {/* ── Suggestions (items mode only) ─────────────────────────────── */}
             {cfg.showLookup && !editingId && form.activePicker === false && (
               isTyping ? (
                 lookupMatches.length > 0 && (
@@ -776,7 +844,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
             {/* ── Keyboard phase — date rows ───────────────────────────────── */}
             {form.activePicker === false && (
               <>
-                {/* Opened on / Started on row */}
                 <Pressable
                   onPress={() => {
                     Keyboard.dismiss();
@@ -791,7 +858,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   <Text style={styles.dateRowChevron}>›</Text>
                 </Pressable>
 
-                {/* Expiry recalculation prompt (items mode only) */}
                 {showExpiryPrompt && (
                   <View style={styles.expiryPrompt}>
                     <Text style={styles.expiryPromptText}>{t.expiryPrompt}</Text>
@@ -806,7 +872,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   </View>
                 )}
 
-                {/* Expires / Cancel by row */}
                 <Pressable
                   onPress={() => {
                     Keyboard.dismiss();
@@ -815,8 +880,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
                       activePicker: 'expiry',
                       expirySource: 'manual',
                       lookupOpenedOn: undefined,
-                      // User is manually setting the expiry — treat openedOn as "accepted"
-                      // so the recalc prompt doesn't reappear after they save.
                       originalOpenedOn: prev.openedOn.toISOString(),
                     }));
                   }}
@@ -831,22 +894,11 @@ export function ListScreen({ mode }: { mode: Mode }) {
               </>
             )}
 
-            {/* ── Calendar phase ───────────────────────────────────────────────
-                BOTH pickers are ALWAYS in the tree.
-                · Conditional rendering causes rapid UIDatePicker destruction /
-                  recreation → native iOS crash.
-                · A single shared picker that mutates its `value` and adds /
-                  removes `maximumDate` when the active type switches also
-                  crashes — the native component can't handle those simultaneous
-                  prop changes while hidden.
-                · Two dedicated instances keep every prop stable: the openedOn
-                  picker always receives form.openedOn + a fixed maximumDate;
-                  the expiry picker always receives form.date with no max.      */}
+            {/* ── Calendar phase ─────────────────────────────────────────────── */}
             <View
               style={form.activePicker === false ? styles.pickerContainerHidden : undefined}
               pointerEvents={form.activePicker === false ? 'none' : 'auto'}
             >
-              {/* Opened-on picker — always mounted, stable value + maximumDate */}
               <View
                 style={form.activePicker !== 'openedOn' ? styles.pickerSlotHidden : undefined}
                 pointerEvents={form.activePicker !== 'openedOn' ? 'none' : 'auto'}
@@ -872,7 +924,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 />
               </View>
 
-              {/* Expiry picker — always mounted, stable value, no maximumDate */}
               <View
                 style={form.activePicker !== 'expiry' ? styles.pickerSlotHidden : undefined}
                 pointerEvents={form.activePicker !== 'expiry' ? 'none' : 'auto'}
@@ -898,12 +949,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
               </View>
             </View>
 
-            {/* ── Buttons / success banner ──────────────────────────────────
-                Picker open:     [Done]            → collapses picker, stays in modal
-                New item:        [Cancel]  [Save]  → closes on save
-                Edit, not dirty: [Close]           → closes immediately
-                Edit, dirty:     [Cancel]  [Save]  → shows banner, resets to Close
-                Success:         ✓ Saved banner (replaces buttons for 1.5 s)   */}
+            {/* ── Buttons / success banner ──────────────────────────────────── */}
             {form.activePicker !== false ? (
               <Pressable
                 onPress={() => {
@@ -933,7 +979,6 @@ export function ListScreen({ mode }: { mode: Mode }) {
               </View>
             )}
 
-            {/* Delete link — only shown for existing items, not while picker is open */}
             {editingId && form.activePicker === false && !showSuccess && (
               <Pressable onPress={handleDeleteFromModal} style={styles.deleteLink}>
                 <Text style={styles.deleteLinkText}>{t.delete}</Text>
@@ -969,6 +1014,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: -1,
     marginBottom: 24,
+  },
+
+  // ── Section headers ────────────────────────────────────────────────────────
+  sectionHeader: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginTop: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
 
   // ── List rows ──────────────────────────────────────────────────────────────
@@ -1125,6 +1184,27 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
 
+  // ── Category picker ────────────────────────────────────────────────────────
+  categoryRow: { flexDirection: 'row', gap: 8, paddingBottom: 2 },
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.bg,
+  },
+  categoryPillActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  categoryPillEmoji: { fontSize: 14 },
+  categoryPillLabel: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
+  categoryPillLabelActive: { color: '#000000', fontWeight: '700' },
+
   // ── Lookup hint ────────────────────────────────────────────────────────────
   lookupHint: {
     fontSize: 12,
@@ -1212,14 +1292,7 @@ const styles = StyleSheet.create({
 
   // ── Date picker (calendar phase) ───────────────────────────────────────────
   datePicker: { width: '100%' },
-  // Outer container collapses to 0 height when no picker is active.
-  // overflow:hidden clips the absolutely-positioned pickers inside, but their
-  // native UIDatePicker frames remain valid (non-zero) — avoiding the iOS crash
-  // that occurs when a UIDatePicker's frame is zeroed while it is mounted.
   pickerContainerHidden: { height: 0, overflow: 'hidden' },
-  // Inactive picker slot: pulled out of the layout flow (position:absolute) and
-  // made invisible/non-interactive.  The active slot stays in-flow and drives
-  // the container's natural height.
   pickerSlotHidden: { position: 'absolute', opacity: 0, width: '100%' },
 
   // ── Modal action buttons ───────────────────────────────────────────────────

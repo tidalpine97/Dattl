@@ -116,7 +116,7 @@ export default Sentry.wrap(function RootLayout() {
 
   useEffect(() => {
     AsyncStorage.getItem('dattl_onboarded')
-      .then(val => setOnboarded(val === 'false'))
+      .then(val => setOnboarded(val === 'true'))
       .catch(() => setOnboarded(false));
   }, []);
 

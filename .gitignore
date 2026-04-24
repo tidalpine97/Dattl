@@ -143,4 +143,7 @@ vite.config.ts.timestamp-*
 
 expo-env.d.ts
 # @end expo-cli
+
+# Expo local state (device history, dev server settings)
+.expo/
 .env.local
