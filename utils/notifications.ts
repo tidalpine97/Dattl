@@ -62,7 +62,11 @@ function buildMorningBody(items: Item[]): string {
 
 // ─── Item notifications (batch per day) ───────────────────────────────────────
 
+let isReschedulingItems = false;
+
 export async function rescheduleAllItemNotifications(items: Item[]): Promise<void> {
+  if (isReschedulingItems) return;
+  isReschedulingItems = true;
   try {
     // Cancel all previously scheduled item notifications
     const storedIds = await AsyncStorage.getItem(ITEM_NOTIF_IDS_KEY);
@@ -141,6 +145,8 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
     Sentry.captureException(e);
     console.error('[Notifications] rescheduleAllItemNotifications failed:', e);
     // Never rethrow — notification failure must not crash the app.
+  } finally {
+    isReschedulingItems = false;
   }
 }
 
@@ -181,8 +187,12 @@ export async function cancelSubscriptionNotifications(ids: string[] | undefined)
   ));
 }
 
+let isReschedulingSubscriptions = false;
+
 // Cancels and reschedules all subscriptions; returns updated items with new notification IDs.
 export async function rescheduleAllSubscriptionNotifications(subscriptions: Item[]): Promise<Item[]> {
+  if (isReschedulingSubscriptions) return subscriptions;
+  isReschedulingSubscriptions = true;
   try {
     const updated: Item[] = [];
     for (const sub of subscriptions) {
@@ -195,6 +205,8 @@ export async function rescheduleAllSubscriptionNotifications(subscriptions: Item
     Sentry.captureException(e);
     console.error('[Notifications] rescheduleAllSubscriptionNotifications failed:', e);
     return subscriptions; // return originals unchanged on failure
+  } finally {
+    isReschedulingSubscriptions = false;
   }
 }
 
