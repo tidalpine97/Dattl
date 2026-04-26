@@ -1,10 +1,61 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import { Platform } from 'react-native';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Dattl design tokens — single source of truth for the dark UI.
+//
+// Orange (`accent`) is reserved for the brand title, the primary CTA per
+// screen, urgent expiry indicators, and tab-bar / date-picker selection.
+// Everywhere else, demote to the neutral tonal scale below.
+// ─────────────────────────────────────────────────────────────────────────────
+export const colors = {
+  // surfaces
+  bg:        '#0f0f0f',
+  surface:   '#161616',
+  surface2:  '#1f1f1f',
+  border:    '#2a2a2a',
+
+  // text
+  text:      '#e8e8e8',
+  muted:     '#888888',
+  mutedDeep: '#555555',
+
+  // brand
+  accent:    '#D97706',
+  onAccent:  '#000000',
+
+  // status
+  warning:   '#f5c542',
+  expired:   '#E05252',
+  success:   '#4ade80',
+  danger:    '#FF6B6B',
+
+  // misc
+  overlay:   'rgba(0,0,0,0.7)',
+} as const;
+
+export const fonts = {
+  brand: 'Poppins_800ExtraBold',
+} as const;
+
+export const weights = {
+  regular: '400',
+  medium:  '500',
+  bold:    '700',
+} as const;
+
+export const radii = {
+  sm:   8,
+  md:   12,
+  lg:   14,
+  xl:   20,
+  pill: 999,
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Legacy Expo-template exports — kept so the unused themed-text / themed-view
+// / parallax-scroll-view / collapsible chain keeps compiling. Not consumed by
+// any real screen. Safe to delete once those template files are removed.
+// ─────────────────────────────────────────────────────────────────────────────
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
