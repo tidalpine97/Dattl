@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Sentry from '@sentry/react-native';
 import { useLanguage, type Lang } from '@/context/language';
 import { STRINGS } from '@/constants/i18n';
+import { colors, fonts, radii, weights } from '@/constants/theme';
 import { isValidDate } from '@/utils/dates';
 import { loadItems, saveItems } from '@/utils/storage';
 import {
@@ -19,15 +20,6 @@ import {
   rescheduleAllItemNotifications,
   rescheduleAllSubscriptionNotifications,
 } from '@/utils/notifications';
-
-const COLORS = {
-  bg:        '#0f0f0f',
-  surface:   '#1a1a1a',
-  border:    '#2a2a2a',
-  text:      '#ffffff',
-  textMuted: '#888888',
-  accent:    '#D97706',
-} as const;
 
 type NotifKey = 'notif_time_morning' | 'notif_time_evening' | 'notif_time_subscriptions';
 type ActiveTimePicker = NotifKey | null;
@@ -196,7 +188,7 @@ export default function SettingsTab() {
       </View>
 
       {/* Notifications */}
-      <View style={[styles.section, { marginTop: 40 }]}>
+      <View style={[styles.section, { marginTop: 48 }]}>
         <Text style={styles.sectionLabel}>
           {lang === 'de' ? 'Benachrichtigungen' : 'Notifications'}
         </Text>
@@ -226,7 +218,7 @@ export default function SettingsTab() {
                       mode="time"
                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                       themeVariant="dark"
-                      accentColor={COLORS.accent}
+                      accentColor={colors.accent}
                       onChange={(_, selectedDate) => {
                         if (!selectedDate) return;
                         const newTime = dateToTime(selectedDate);
@@ -245,7 +237,7 @@ export default function SettingsTab() {
 
       {/* Developer Tools (hidden, unlocked by tapping version 5×) */}
       {devToolsVisible && (
-        <View style={[styles.section, { marginTop: 40 }]}>
+        <View style={[styles.section, { marginTop: 48 }]}>
           <View style={styles.devHeader}>
             <Text style={styles.sectionLabel}>Developer Tools</Text>
             <Pressable onPress={hideDevTools} style={styles.lockBtn} hitSlop={8}>
@@ -273,7 +265,7 @@ export default function SettingsTab() {
 
             {/* Reset Dev Tools */}
             <Pressable onPress={handleResetDevTools} style={styles.devRow}>
-              <Text style={[styles.devRowText, { color: '#FF6B6B' }]}>Reset Dev Tools</Text>
+              <Text style={[styles.devRowText, { color: colors.danger }]}>Reset Dev Tools</Text>
             </Pressable>
           </View>
         </View>
@@ -285,89 +277,88 @@ export default function SettingsTab() {
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: colors.bg,
   },
   container: {
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   logo: {
-    fontFamily: 'Poppins_800ExtraBold',
+    fontFamily: fonts.brand,
     fontSize: 56,
-    color: COLORS.accent,
+    color: colors.accent,
     letterSpacing: -1,
   },
   version: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: colors.muted,
     marginTop: 4,
-    marginBottom: 48,
+    marginBottom: 56,
   },
   section: {
     width: '100%',
     alignItems: 'center',
-    gap: 14,
+    gap: 16,
   },
   sectionLabel: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: colors.muted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   toggle: {
     flexDirection: 'row',
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   toggleBtn: {
     paddingVertical: 12,
     paddingHorizontal: 32,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   toggleBtnActive: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: colors.surface2,
   },
   toggleText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textMuted,
+    fontWeight: weights.medium,
+    color: colors.muted,
     letterSpacing: 1,
   },
   toggleTextActive: {
-    color: '#000000',
+    color: colors.text,
   },
 
   // ── Notifications section ──────────────────────────────────────────────────
   notifCard: {
     width: '100%',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     overflow: 'hidden',
   },
   notifRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 16,
   },
   notifLabel: {
     fontSize: 15,
-    color: COLORS.text,
+    color: colors.text,
   },
   notifTime: {
     fontSize: 15,
-    color: COLORS.textMuted,
-    fontWeight: '600',
+    color: colors.muted,
   },
   notifTimeActive: {
-    color: COLORS.accent,
+    color: colors.text,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.border,
+    backgroundColor: colors.border,
     marginHorizontal: 16,
   },
   timePickerWrap: {
@@ -388,26 +379,25 @@ const styles = StyleSheet.create({
   lockBtn: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: radii.sm,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   lockBtnText: {
     fontSize: 12,
-    color: COLORS.textMuted,
-    fontWeight: '600',
+    color: colors.muted,
   },
   devRow: {
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 16,
   },
   devRowText: {
     fontSize: 15,
-    color: COLORS.text,
+    color: colors.text,
   },
   devConfirm: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: colors.muted,
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
