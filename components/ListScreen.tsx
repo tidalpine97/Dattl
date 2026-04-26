@@ -27,6 +27,7 @@ import { type DattlItem, DATTL_ITEMS, findItem, suggestedExpiryDate } from '@/co
 import { useLanguage } from '@/context/language';
 import { STRINGS } from '@/constants/i18n';
 import { syncWidgetItems } from '@/utils/sharedStorage';
+import { colors, fonts, radii, weights } from '@/constants/theme';
 import {
   cancelNotification,
   cancelSubscriptionNotifications,
@@ -36,18 +37,6 @@ import {
 } from '@/utils/notifications';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const COLORS = {
-  bg:        '#0f0f0f',
-  surface:   '#1a1a1a',
-  border:    '#2a2a2a',
-  text:      '#ffffff',
-  textMuted: '#888888',
-  accent:    '#D97706',
-  warning:   '#f5c542',
-  expired:   '#E05252',
-  overlay:   'rgba(0,0,0,0.7)',
-} as const;
 
 const PICKER_INLINE = Platform.OS === 'ios';
 const PICKER_MIN_DATE = new Date(2000, 0, 1);
@@ -557,7 +546,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 <Ionicons
                   name={starred ? 'star' : 'star-outline'}
                   size={18}
-                  color={starred ? COLORS.accent : COLORS.textMuted}
+                  color={starred ? colors.text : colors.muted}
                 />
               </Pressable>
             </View>
@@ -612,7 +601,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
     const r = Math.round(245 + (224 - 245) * ratio);
     const g = Math.round(197 + ( 82 - 197) * ratio);
     const b = Math.round( 66 + ( 82 -  66) * ratio);
-    const badgeColor = allClear ? '#4ade80' : `rgb(${r},${g},${b})`;
+    const badgeColor = allClear ? colors.success : `rgb(${r},${g},${b})`;
 
     return (
       <View style={styles.overviewCard}>
@@ -622,20 +611,20 @@ export function ListScreen({ mode }: { mode: Mode }) {
           </Text>
         </View>
         <View style={styles.overviewContent}>
-          <Text style={[styles.overviewTitle, { color: allClear ? '#4ade80' : COLORS.text }]}>
+          <Text style={[styles.overviewTitle, { color: allClear ? colors.success : colors.text }]}>
             {allClear
               ? t.overviewAllClear
               : tcfg.overviewNeedsAttention(attention)}
           </Text>
           <View style={styles.overviewBar}>
             {expired > 0 && (
-              <View style={[styles.overviewSeg, { flex: expired, backgroundColor: COLORS.expired }]} />
+              <View style={[styles.overviewSeg, { flex: expired, backgroundColor: colors.expired }]} />
             )}
             {soon > 0 && (
-              <View style={[styles.overviewSeg, { flex: soon, backgroundColor: COLORS.warning }]} />
+              <View style={[styles.overviewSeg, { flex: soon, backgroundColor: colors.warning }]} />
             )}
             {allClear && (
-              <View style={[styles.overviewSeg, { flex: 1, backgroundColor: '#4ade8030' }]} />
+              <View style={[styles.overviewSeg, { flex: 1, backgroundColor: 'rgba(74,222,128,0.19)' }]} />
             )}
           </View>
           {!allClear && (
@@ -700,7 +689,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
             <TextInput
               style={styles.input}
               placeholder={tcfg.placeholder}
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.muted}
               value={form.name}
               onChangeText={text => {
                 setIsDirty(true);
@@ -908,7 +897,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   mode="date"
                   display={PICKER_INLINE ? 'inline' : 'default'}
                   themeVariant="dark"
-                  accentColor="#C96A00"
+                  accentColor={colors.accent}
                   minimumDate={PICKER_MIN_DATE}
                   maximumDate={maxPickerDate}
                   onChange={(_, selectedDate) => {
@@ -933,7 +922,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
                   mode="date"
                   display={PICKER_INLINE ? 'inline' : 'default'}
                   themeVariant="dark"
-                  accentColor="#C96A00"
+                  accentColor={colors.accent}
                   minimumDate={PICKER_MIN_DATE}
                   onChange={(_, selectedDate) => {
                     setForm(prev => {
@@ -995,7 +984,7 @@ export function ListScreen({ mode }: { mode: Mode }) {
 
 const btnBase = {
   flex: 1,
-  borderRadius: 12,
+  borderRadius: radii.md,
   padding: 16,
   alignItems: 'center' as const,
 };
@@ -1003,71 +992,71 @@ const btnBase = {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: colors.bg,
     paddingTop: 60,
     paddingHorizontal: 20,
   },
   header: {
-    fontFamily: 'Poppins_800ExtraBold',
+    fontFamily: fonts.brand,
     fontSize: 42,
-    color: COLORS.accent,
+    color: colors.accent,
     textAlign: 'center',
     letterSpacing: -1,
-    marginBottom: 24,
+    marginBottom: 28,
   },
 
   // ── Section headers ────────────────────────────────────────────────────────
   sectionHeader: {
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 4,
-    marginTop: 4,
+    marginTop: 8,
   },
   sectionHeaderText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMuted,
+    fontWeight: weights.medium,
+    color: colors.muted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
 
   // ── List rows ──────────────────────────────────────────────────────────────
-  rowContainer: { marginBottom: 8 },
+  rowContainer: { marginBottom: 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingRight: 8,
     paddingLeft: 16,
-    borderRadius: 12,
-    backgroundColor: '#1C1C1C',
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     borderLeftWidth: 4,
     borderLeftColor: 'transparent',
   },
-  rowWarning: { borderLeftColor: COLORS.warning },
-  rowExpired: { borderLeftColor: COLORS.expired },
+  rowWarning: { borderLeftColor: colors.warning },
+  rowExpired: { borderLeftColor: colors.expired },
   info: { flex: 1 },
-  name: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  openedOn: { fontSize: 11, color: COLORS.textMuted, marginTop: 3 },
-  longerUsableHint: { fontSize: 11, color: COLORS.accent, marginTop: 3 },
+  name: { fontSize: 18, fontWeight: weights.medium, color: colors.text },
+  openedOn: { fontSize: 11, color: colors.muted, marginTop: 3 },
+  longerUsableHint: { fontSize: 11, color: colors.muted, marginTop: 3 },
 
   // ── Swipe-to-delete ────────────────────────────────────────────────────────
   swipeDeleteAction: {
-    backgroundColor: COLORS.expired,
+    backgroundColor: colors.expired,
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    borderRadius: 12,
+    borderRadius: radii.md,
     marginLeft: 6,
   },
-  swipeDeleteText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  swipeDeleteText: { color: colors.text, fontSize: 14, fontWeight: weights.medium },
 
   // ── Right-side column ──────────────────────────────────────────────────────
   rightSide: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statusLabel: { fontSize: 11, fontWeight: '500', textAlign: 'right' },
-  statusWarning: { color: COLORS.warning },
-  statusExpired: { color: COLORS.expired },
-  statusNeutral: { color: COLORS.textMuted },
+  statusLabel: { fontSize: 11, fontWeight: weights.medium, textAlign: 'right' },
+  statusWarning: { color: colors.warning },
+  statusExpired: { color: colors.expired },
+  statusNeutral: { color: colors.muted },
   starBtn: { paddingHorizontal: 10, paddingVertical: 6 },
 
   // ── Empty state ────────────────────────────────────────────────────────────
@@ -1082,18 +1071,18 @@ const styles = StyleSheet.create({
   emptyLogo: {
     width: 90,
     height: 90,
-    borderRadius: 20,
+    borderRadius: radii.xl,
     marginBottom: 4,
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontWeight: weights.medium,
+    color: colors.text,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: COLORS.textMuted,
+    color: colors.muted,
     textAlign: 'center',
     maxWidth: 220,
     lineHeight: 20,
@@ -1104,23 +1093,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
+    backgroundColor: colors.surface2,
+    borderRadius: radii.lg,
+    padding: 16,
+    marginBottom: 20,
   },
   overviewBadge: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    borderWidth: 3,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   overviewBadgeText: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: weights.bold,
   },
   overviewContent: {
     flex: 1,
@@ -1128,7 +1117,7 @@ const styles = StyleSheet.create({
   },
   overviewTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: weights.medium,
   },
   overviewBar: {
     flexDirection: 'row',
@@ -1142,46 +1131,46 @@ const styles = StyleSheet.create({
   },
   overviewMeta: {
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: colors.muted,
   },
 
   // ── Bottom action area ─────────────────────────────────────────────────────
   bottomSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#272727',
+    borderTopColor: colors.border,
     paddingTop: 12,
   },
   addButton: {
-    backgroundColor: '#7A4200',
-    borderRadius: 14,
+    backgroundColor: colors.accent,
+    borderRadius: radii.lg,
     paddingVertical: 12,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  addButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
+  addButtonText: { color: colors.onAccent, fontSize: 16, fontWeight: weights.bold, letterSpacing: 0.2 },
 
   // ── Modal ──────────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: COLORS.overlay,
+    backgroundColor: colors.overlay,
   },
   modalBox: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     gap: 12,
   },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text },
+  modalTitle: { fontSize: 20, fontWeight: weights.medium, color: colors.text },
   input: {
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     padding: 14,
     fontSize: 16,
-    color: COLORS.text,
-    backgroundColor: COLORS.bg,
+    color: colors.text,
+    backgroundColor: colors.bg,
   },
 
   // ── Category picker ────────────────────────────────────────────────────────
@@ -1191,24 +1180,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 20,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: COLORS.bg,
+    backgroundColor: colors.bg,
   },
   categoryPillActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
   },
   categoryPillEmoji: { fontSize: 14 },
-  categoryPillLabel: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
-  categoryPillLabelActive: { color: '#000000', fontWeight: '700' },
+  categoryPillLabel: { fontSize: 12, color: colors.muted },
+  categoryPillLabelActive: { color: colors.text, fontWeight: weights.medium },
 
   // ── Lookup hint ────────────────────────────────────────────────────────────
   lookupHint: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: colors.muted,
     marginTop: -4,
   },
 
@@ -1221,74 +1210,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderColor: COLORS.accent,
-    borderRadius: 20,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#1C1C1C',
+    backgroundColor: colors.surface,
   },
-  lookupPillName: { fontSize: 13, color: COLORS.text, fontWeight: '500' },
-  lookupPillDuration: { fontSize: 11, color: COLORS.accent },
+  lookupPillName: { fontSize: 13, color: colors.text, fontWeight: weights.medium },
+  lookupPillDuration: { fontSize: 11, color: colors.muted },
 
   // ── Quick Add pills ────────────────────────────────────────────────────────
-  quickAddLabel: { fontSize: 11, color: COLORS.textMuted },
+  quickAddLabel: { fontSize: 11, color: colors.muted },
   quickAddPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
-    borderColor: '#333333',
-    borderRadius: 20,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#1C1C1C',
+    backgroundColor: colors.surface,
   },
-  quickAddStar: { fontSize: 10, color: COLORS.accent },
-  quickAddPillText: { fontSize: 12, color: COLORS.text },
+  quickAddStar: { fontSize: 10, color: colors.muted },
+  quickAddPillText: { fontSize: 12, color: colors.text },
 
   // ── Date rows (keyboard phase) ─────────────────────────────────────────────
   dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    backgroundColor: COLORS.bg,
+    backgroundColor: colors.bg,
   },
-  dateRowLabel: { fontSize: 14, color: COLORS.textMuted, flex: 1 },
-  dateRowValue: { fontSize: 15, color: COLORS.text, marginRight: 8 },
-  dateRowChevron: { fontSize: 18, color: COLORS.accent, fontWeight: '600' },
+  dateRowLabel: { fontSize: 14, color: colors.muted, flex: 1 },
+  dateRowValue: { fontSize: 15, color: colors.text, marginRight: 8 },
+  dateRowChevron: { fontSize: 18, color: colors.muted },
 
   // ── Expiry recalculation prompt ────────────────────────────────────────────
   expiryPrompt: {
     borderWidth: 1,
-    borderColor: COLORS.warning,
-    borderRadius: 12,
+    borderColor: colors.warning,
+    borderRadius: radii.md,
     padding: 12,
     gap: 10,
     backgroundColor: 'rgba(245,197,66,0.07)',
   },
-  expiryPromptText: { fontSize: 13, color: COLORS.warning },
+  expiryPromptText: { fontSize: 13, color: colors.warning },
   expiryPromptBtns: { flexDirection: 'row', gap: 8 },
   promptYes: {
     flex: 1,
-    backgroundColor: COLORS.warning,
-    borderRadius: 8,
+    backgroundColor: colors.warning,
+    borderRadius: radii.sm,
     paddingVertical: 8,
     alignItems: 'center',
   },
-  promptYesText: { fontSize: 13, color: '#000', fontWeight: '700' },
+  promptYesText: { fontSize: 13, color: colors.onAccent, fontWeight: weights.bold },
   promptNo: {
     flex: 1,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
     paddingVertical: 8,
     alignItems: 'center',
   },
-  promptNoText: { fontSize: 13, color: COLORS.textMuted },
+  promptNoText: { fontSize: 13, color: colors.muted },
 
   // ── Date picker (calendar phase) ───────────────────────────────────────────
   datePicker: { width: '100%' },
@@ -1296,41 +1285,41 @@ const styles = StyleSheet.create({
   pickerSlotHidden: { position: 'absolute', opacity: 0, width: '100%' },
 
   // ── Modal action buttons ───────────────────────────────────────────────────
-  doneBtn: { borderRadius: 12, padding: 16, alignItems: 'center', backgroundColor: COLORS.accent, marginBottom: 8 },
-  doneBtnText: { fontSize: 16, color: '#000000', fontWeight: '700' },
+  doneBtn: { borderRadius: radii.md, padding: 16, alignItems: 'center', backgroundColor: colors.accent, marginBottom: 8 },
+  doneBtnText: { fontSize: 16, color: colors.onAccent, fontWeight: weights.bold },
   modalButtons: { flexDirection: 'row', gap: 12, paddingBottom: 8 },
-  closeOnlyBtn: { borderRadius: 12, padding: 16, alignItems: 'center' as const, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
-  cancelBtn: { ...btnBase, borderWidth: 1, borderColor: COLORS.border },
-  cancelText: { fontSize: 16, color: COLORS.textMuted },
-  saveBtn: { ...btnBase, backgroundColor: COLORS.accent },
-  saveText: { fontSize: 16, color: '#000000', fontWeight: '700' },
+  closeOnlyBtn: { borderRadius: radii.md, padding: 16, alignItems: 'center' as const, borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
+  cancelBtn: { ...btnBase, borderWidth: 1, borderColor: colors.border },
+  cancelText: { fontSize: 16, color: colors.muted },
+  saveBtn: { ...btnBase, backgroundColor: colors.accent },
+  saveText: { fontSize: 16, color: colors.onAccent, fontWeight: weights.bold },
 
   // ── Item info card (edit mode) ─────────────────────────────────────────────
   infoCard: {
-    backgroundColor: COLORS.bg,
+    backgroundColor: colors.bg,
     borderRadius: 10,
     padding: 12,
     gap: 4,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
-  infoTypical: { fontSize: 13, color: COLORS.text, fontWeight: '600' },
-  infoHint:    { fontSize: 12, color: COLORS.textMuted },
-  infoLonger:  { fontSize: 12, color: COLORS.accent },
+  infoTypical: { fontSize: 13, color: colors.text, fontWeight: weights.medium },
+  infoHint:    { fontSize: 12, color: colors.muted },
+  infoLonger:  { fontSize: 12, color: colors.muted },
 
   // ── Delete link ────────────────────────────────────────────────────────────
   deleteLink: { alignItems: 'center', paddingVertical: 4 },
-  deleteLinkText: { fontSize: 14, color: '#E05252' },
+  deleteLinkText: { fontSize: 14, color: colors.expired },
 
   // ── Save success confirmation ──────────────────────────────────────────────
   successBanner: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     paddingVertical: 14,
     paddingBottom: 22,
     alignItems: 'center',
     backgroundColor: 'rgba(74,222,128,0.08)',
     borderWidth: 1,
-    borderColor: '#4ade8040',
+    borderColor: 'rgba(74,222,128,0.25)',
   },
-  successText: { fontSize: 16, fontWeight: '700', color: '#4ade80' },
+  successText: { fontSize: 16, fontWeight: weights.medium, color: colors.success },
 });
