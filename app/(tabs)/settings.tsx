@@ -7,8 +7,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Sentry from '@sentry/react-native';
 import { useLanguage, type Lang } from '@/context/language';
 import { STRINGS } from '@/constants/i18n';
+import { isValidDate } from '@/utils/dates';
 import { loadItems, saveItems } from '@/utils/storage';
 import {
   NOTIF_TIME_MORNING,
@@ -31,10 +33,23 @@ type NotifKey = 'notif_time_morning' | 'notif_time_evening' | 'notif_time_subscr
 type ActiveTimePicker = NotifKey | null;
 
 function timeToDate(timeStr: string): Date {
-  const [h, m] = timeStr.split(':').map(Number);
+  const parts = timeStr.split(':');
+  const h = Number(parts[0]);
+  const m = Number(parts[1]);
+  const safeH = Number.isFinite(h) && h >= 0 && h <= 23 ? h : 9;
+  const safeM = Number.isFinite(m) && m >= 0 && m <= 59 ? m : 0;
   const d = new Date();
-  d.setHours(h ?? 9, m ?? 0, 0, 0);
+  d.setHours(safeH, safeM, 0, 0);
+  if (!isValidDate(d)) {
+    Sentry.captureMessage(`timeToDate produced invalid Date from "${timeStr}"`);
+    return new Date();
+  }
   return d;
+}
+
+function pickerValue(timeStr: string): Date {
+  const v = timeToDate(timeStr);
+  return isValidDate(v) ? v : new Date();
 }
 
 function dateToTime(d: Date): string {
@@ -207,7 +222,7 @@ export default function SettingsTab() {
                 {isActive && (
                   <View style={styles.timePickerWrap}>
                     <DateTimePicker
-                      value={timeToDate(timeStr)}
+                      value={pickerValue(timeStr)}
                       mode="time"
                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                       themeVariant="dark"

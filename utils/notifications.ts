@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 
 import type { Item } from './storage';
+import { isValidDate } from './dates';
 
 // ─── Time constants ────────────────────────────────────────────────────────────
 
@@ -36,13 +37,18 @@ export async function requestNotificationPermission(): Promise<boolean> {
 // new Date("2026-04-24") → UTC midnight → 22:00 local in UTC+2 (yesterday!).
 // This fix ensures today's items are never treated as past-dated.
 function parseLocalDate(dateStr: string): Date {
-  const [year, month, day] = dateStr.split('-').map(Number);
+  const [year, month, day] = (dateStr ?? '').split('-').map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date(NaN);
+  }
   return new Date(year, month - 1, day);
 }
 
 function parseTime(timeStr: string): { hour: number; minute: number } {
-  const [h, m] = timeStr.split(':').map(Number);
-  return { hour: h ?? 9, minute: m ?? 0 };
+  const [h, m] = (timeStr ?? '').split(':').map(Number);
+  const hour   = Number.isFinite(h) && h >= 0 && h <= 23 ? h : 9;
+  const minute = Number.isFinite(m) && m >= 0 && m <= 59 ? m : 0;
+  return { hour, minute };
 }
 
 function buildFireDate(baseDate: Date, timeStr: string): Date {
@@ -95,6 +101,10 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
     const byDay = new Map<string, Item[]>();
     for (const item of items) {
       const expiry = parseLocalDate(item.expiryDate);
+      if (!isValidDate(expiry)) {
+        Sentry.captureMessage(`Item ${item.id} has invalid expiryDate "${item.expiryDate}"`);
+        continue;
+      }
       if (expiry < today || expiry > horizon) continue;
       const key = isoDateKey(expiry);
       if (!byDay.has(key)) byDay.set(key, []);
@@ -113,7 +123,9 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
 
       // Morning notification on expiry day
       const morningAt = buildFireDate(expiryDate, morningTime);
-      if (morningAt > nowPlus60 && scheduled < IOS_NOTIF_LIMIT) {
+      if (!isValidDate(morningAt)) {
+        Sentry.captureMessage(`Skipped item morning notif: invalid date for "${key}"`);
+      } else if (morningAt > nowPlus60 && scheduled < IOS_NOTIF_LIMIT) {
         const id = await Notifications.scheduleNotificationAsync({
           content: { title: 'Dattl', body: buildMorningBody(dayItems) },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: morningAt },
@@ -126,7 +138,9 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
       const prevDay = new Date(expiryDate);
       prevDay.setDate(prevDay.getDate() - 1);
       const eveningAt = buildFireDate(prevDay, eveningTime);
-      if (eveningAt > nowPlus60 && scheduled < IOS_NOTIF_LIMIT) {
+      if (!isValidDate(eveningAt)) {
+        Sentry.captureMessage(`Skipped item evening notif: invalid date for "${key}"`);
+      } else if (eveningAt > nowPlus60 && scheduled < IOS_NOTIF_LIMIT) {
         const count = dayItems.length;
         const body = count === 1
           ? `Tomorrow ${dayItems[0].name} expires — time to shop?`
@@ -157,6 +171,10 @@ export async function scheduleSubscriptionNotifications(item: Item): Promise<str
   const time = saved ?? NOTIF_TIME_SUBSCRIPTIONS;
 
   const renewDate = parseLocalDate(item.expiryDate);
+  if (!isValidDate(renewDate)) {
+    Sentry.captureMessage(`Subscription ${item.id} has invalid expiryDate "${item.expiryDate}"`);
+    return [];
+  }
   const nowPlus60 = new Date(Date.now() + 60_000);
   const ids: string[] = [];
 
@@ -164,6 +182,10 @@ export async function scheduleSubscriptionNotifications(item: Item): Promise<str
     const fireDate = new Date(renewDate);
     fireDate.setDate(fireDate.getDate() - daysAhead);
     const fireAt = buildFireDate(fireDate, time);
+    if (!isValidDate(fireAt)) {
+      Sentry.captureMessage(`Skipped subscription notif: invalid fireAt for ${item.id}`);
+      continue;
+    }
     if (fireAt <= nowPlus60) continue;
 
     const body = daysAhead === 7

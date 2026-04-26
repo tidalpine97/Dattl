@@ -12,6 +12,14 @@ export const DATE_FORMAT: Intl.DateTimeFormatOptions = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Type-narrowing validity check for Date objects.
+// Use this anywhere a Date crosses into a native bridge (DateTimePicker,
+// expo-notifications). iOS 26 made these surfaces strict — an Invalid Date
+// triggers an NSInternalInconsistencyException instead of being coerced.
+export function isValidDate(d: unknown): d is Date {
+  return d instanceof Date && !isNaN(d.getTime());
+}
+
 // How many days between today and the expiry date.
 // Returns a negative number if the item has already expired.
 // Both dates are floored to midnight so the result is always a whole day,
