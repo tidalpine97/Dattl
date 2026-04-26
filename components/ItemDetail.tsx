@@ -8,17 +8,7 @@ import { DATE_FORMAT, formatDate, getDaysUntilExpiry } from '@/utils/dates';
 import { DATTL_ITEMS } from '@/constants/dattlItems';
 import type { Lang } from '@/context/language';
 import { type Strings, type ModeStrings } from '@/constants/i18n';
-
-const COLORS = {
-  bg:        '#0f0f0f',
-  surface:   '#1a1a1a',
-  border:    '#2a2a2a',
-  text:      '#ffffff',
-  textMuted: '#888888',
-  accent:    '#D97706',
-  warning:   '#f5c542',
-  expired:   '#E05252',
-} as const;
+import { colors, fonts, radii, weights } from '@/constants/theme';
 
 type Props = {
   item: Item;
@@ -76,7 +66,7 @@ export function ItemDetail({ item, lang, t, tcfg, showLookup, onClose, onEdit, o
             style={styles.backBtn}
             hitSlop={12}
           >
-            <Ionicons name="chevron-back" size={22} color={COLORS.accent} />
+            <Ionicons name="chevron-back" size={22} color={colors.muted} />
             <Text style={styles.backText}>{lang === 'de' ? 'Zurück' : 'Back'}</Text>
           </Pressable>
         </View>
@@ -149,7 +139,7 @@ export function ItemDetail({ item, lang, t, tcfg, showLookup, onClose, onEdit, o
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: colors.bg,
   },
   topBar: {
     flexDirection: 'row',
@@ -157,7 +147,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#272727',
+    borderBottomColor: colors.border,
   },
   backBtn: {
     flexDirection: 'row',
@@ -166,83 +156,83 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: COLORS.accent,
+    color: colors.muted,
   },
   body: {
     padding: 24,
-    gap: 16,
+    gap: 18,
   },
   itemName: {
-    fontFamily: 'Poppins_800ExtraBold',
+    fontFamily: fonts.brand,
     fontSize: 32,
-    color: COLORS.text,
+    color: colors.text,
     lineHeight: 40,
   },
   statusChip: {
     alignSelf: 'flex-start',
-    borderRadius: 20,
+    borderRadius: radii.xl,
     paddingVertical: 4,
     paddingHorizontal: 12,
     borderWidth: 1,
   },
-  chipExpired: { backgroundColor: 'rgba(224,82,82,0.12)', borderColor: COLORS.expired },
-  chipSoon:    { backgroundColor: 'rgba(245,197,66,0.12)', borderColor: COLORS.warning },
-  statusChipText: { fontSize: 13, fontWeight: '600' },
-  chipTextExpired: { color: COLORS.expired },
-  chipTextSoon:    { color: COLORS.warning },
+  chipExpired: { backgroundColor: 'rgba(224,82,82,0.12)', borderColor: colors.expired },
+  chipSoon:    { backgroundColor: 'rgba(245,197,66,0.12)', borderColor: colors.warning },
+  statusChipText: { fontSize: 13, fontWeight: weights.medium },
+  chipTextExpired: { color: colors.expired },
+  chipTextSoon:    { color: colors.warning },
   datesCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
     overflow: 'hidden',
   },
   dateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
   },
   dateRowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.border,
+    borderTopColor: colors.border,
   },
-  dateLabel: { fontSize: 14, color: COLORS.textMuted },
-  dateValue: { fontSize: 15, color: COLORS.text, fontWeight: '500' },
-  dateExpired: { color: COLORS.expired },
-  dateSoon:    { color: COLORS.warning },
+  dateLabel: { fontSize: 14, color: colors.muted },
+  dateValue: { fontSize: 15, color: colors.text, fontWeight: weights.medium },
+  dateExpired: { color: colors.expired },
+  dateSoon:    { color: colors.warning },
   infoCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: 18,
     gap: 8,
   },
-  infoTypical: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
-  infoHint:    { fontSize: 13, color: COLORS.textMuted },
-  infoLonger:  { fontSize: 13, color: COLORS.accent },
+  infoTypical: { fontSize: 14, color: colors.text, fontWeight: weights.medium },
+  infoHint:    { fontSize: 13, color: colors.muted },
+  infoLonger:  { fontSize: 13, color: colors.muted },
   actions: {
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 24,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#272727',
+    borderTopColor: colors.border,
   },
   editBtn: {
     flex: 1,
-    backgroundColor: COLORS.accent,
-    borderRadius: 14,
+    backgroundColor: colors.accent,
+    borderRadius: radii.lg,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  editBtnText: { fontSize: 16, fontWeight: '700', color: '#000000' },
+  editBtnText: { fontSize: 16, fontWeight: weights.bold, color: colors.onAccent },
   deleteBtn: {
     flex: 1,
     backgroundColor: 'rgba(224,82,82,0.12)',
-    borderRadius: 14,
+    borderRadius: radii.lg,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.expired,
+    borderColor: colors.expired,
   },
-  deleteBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.expired },
+  deleteBtnText: { fontSize: 16, fontWeight: weights.medium, color: colors.expired },
 });
