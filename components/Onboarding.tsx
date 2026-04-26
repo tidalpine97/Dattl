@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useLanguage } from '@/context/language';
 import { STRINGS } from '@/constants/i18n';
+import { colors, fonts, radii, weights } from '@/constants/theme';
 import { requestNotificationPermission } from '@/utils/notifications';
 
 // Icon for each slide — not translated, just visual
@@ -22,12 +23,6 @@ const SLIDE_ICONS: Array<keyof typeof Ionicons.glyphMap> = [
   'star-outline',
   'notifications-outline',
 ];
-
-const ACCENT   = '#D97706';
-const BG       = '#0f0f0f';
-const TEXT     = '#ffffff';
-const MUTED    = '#888888';
-const SURFACE  = '#1a1a1a';
 
 type Props = { onDone: () => void };
 
@@ -95,7 +90,7 @@ export function Onboarding({ onDone }: Props) {
           <View key={i} style={[styles.slide, { width }]}>
             {/* Icon ring */}
             <View style={styles.iconRing}>
-              <Ionicons name={SLIDE_ICONS[i]} size={48} color={ACCENT} />
+              <Ionicons name={SLIDE_ICONS[i]} size={48} color={colors.text} />
             </View>
 
             <Text style={styles.title}>{slide.title}</Text>
@@ -138,7 +133,7 @@ export function Onboarding({ onDone }: Props) {
 const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: BG,
+    backgroundColor: colors.bg,
     zIndex: 999,
   },
 
@@ -156,7 +151,7 @@ const styles = StyleSheet.create({
   },
   skipText: {
     fontSize: 15,
-    color: MUTED,
+    color: colors.muted,
   },
 
   // ── Slide ──────────────────────────────────────────────────────────────────
@@ -165,29 +160,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 36,
-    gap: 24,
+    gap: 28,
   },
   iconRing: {
     width: 108,
     height: 108,
     borderRadius: 54,
-    borderWidth: 2,
-    borderColor: '#2a2a2a',
-    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   title: {
-    fontFamily: 'Poppins_800ExtraBold',
+    fontFamily: fonts.brand,
     fontSize: 28,
-    color: TEXT,
+    color: colors.text,
     textAlign: 'center',
     lineHeight: 36,
   },
   subtitle: {
     fontSize: 16,
-    color: MUTED,
+    color: colors.muted,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -195,8 +190,8 @@ const styles = StyleSheet.create({
   // ── Footer ─────────────────────────────────────────────────────────────────
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: 16,
-    gap: 16,
+    paddingBottom: 20,
+    gap: 20,
     alignItems: 'center',
   },
   dots: {
@@ -208,29 +203,29 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#333333',
+    backgroundColor: colors.mutedDeep,
   },
   dotActive: {
     width: 20,
-    backgroundColor: ACCENT,
+    backgroundColor: colors.text,
   },
   ctaBtn: {
     width: '100%',
-    backgroundColor: ACCENT,
-    borderRadius: 14,
+    backgroundColor: colors.accent,
+    borderRadius: radii.lg,
     paddingVertical: 16,
     alignItems: 'center',
   },
   ctaText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#000000',
+    fontWeight: weights.bold,
+    color: colors.onAccent,
   },
   skipNotifsBtn: {
     paddingVertical: 4,
   },
   skipNotifsText: {
     fontSize: 14,
-    color: MUTED,
+    color: colors.muted,
   },
 });
