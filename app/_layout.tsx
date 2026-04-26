@@ -13,6 +13,7 @@ import 'react-native-reanimated'; // must be imported in the root layout to init
 import { Onboarding } from '@/components/Onboarding';
 import { LanguageProvider } from '@/context/language';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { colors, radii, weights } from '@/constants/theme';
 import * as Sentry from '@sentry/react-native';
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
@@ -34,32 +35,32 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 const errorStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   title: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: weights.medium,
     marginBottom: 12,
   },
   message: {
-    color: '#888',
+    color: colors.muted,
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 32,
   },
   button: {
-    backgroundColor: '#D97706',
+    backgroundColor: colors.accent,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radii.sm,
   },
   buttonText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: colors.onAccent,
+    fontWeight: weights.bold,
     fontSize: 15,
   },
 });
@@ -136,7 +137,7 @@ export default Sentry.wrap(function RootLayout() {
   return (
     // GestureHandlerRootView must wrap the entire app for Swipeable (and any
     // other gesture-handler components) to work. flex:1 ensures it fills the screen.
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <LanguageProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
 

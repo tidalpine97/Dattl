@@ -2,10 +2,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/context/language';
 import { STRINGS } from '@/constants/i18n';
-
-const ACTIVE   = '#D97706';
-const INACTIVE = '#888888';
-const TAB_BG   = '#111111';
+import { colors } from '@/constants/theme';
 
 export default function TabLayout() {
   const { lang } = useLanguage();
@@ -14,11 +11,11 @@ export default function TabLayout() {
   return (
     <Tabs screenOptions={{
       headerShown: false,
-      tabBarActiveTintColor:   ACTIVE,
-      tabBarInactiveTintColor: INACTIVE,
+      tabBarActiveTintColor:   colors.accent,
+      tabBarInactiveTintColor: colors.muted,
       tabBarStyle: {
-        backgroundColor: TAB_BG,
-        borderTopColor:  '#222222',
+        backgroundColor: colors.bg,
+        borderTopColor:  colors.border,
       },
     }}>
       <Tabs.Screen
