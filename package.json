@@ -11,6 +11,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^4.0.7",
     "@expo-google-fonts/poppins": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -51,7 +52,9 @@
   "private": true,
   "expo": {
     "install": {
-      "exclude": ["@sentry/react-native"]
+      "exclude": [
+        "@sentry/react-native"
+      ]
     }
   }
 }

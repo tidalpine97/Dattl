@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "io.dattl.app"
+      "bundleIdentifier": "io.dattl.app",
+      "appleTeamId": "REPLACE_WITH_TEAM_ID",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.io.dattl.app"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -49,7 +53,8 @@
           "project": "react-native",
           "organization": "philipp-19"
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -267,10 +267,10 @@ export function ListScreen({ mode }: { mode: Mode }) {
     if (!hasLoaded.current) return;
     saveItems(items, cfg.storageKey).catch(e => console.error('Failed to save items:', e));
     if (mode === 'item') {
-      syncWidgetItems(items);
+      syncWidgetItems(items, lang);
       rescheduleAllItemNotifications(items).catch(e => console.error('Notification reschedule failed:', e));
     }
-  }, [items, cfg.storageKey, mode]);
+  }, [items, cfg.storageKey, mode, lang]);
 
   useEffect(() => {
     if (modalVisible) setShowSuccess(false);
