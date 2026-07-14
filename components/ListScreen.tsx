@@ -21,7 +21,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 
 import { type Item, type ItemCategory, loadItems, saveItems } from '@/utils/storage';
-import { DATE_FORMAT, formatDate, getDaysUntilExpiry, getExpiryLabel, getSubscriptionLabel } from '@/utils/dates';
+import { clampDate, DATE_FORMAT, endOfToday, formatDate, getDaysUntilExpiry, getExpiryLabel, getSubscriptionLabel } from '@/utils/dates';
 import { useFavorites } from '@/hooks/use-favorites';
 import { type DattlItem, DATTL_ITEMS, findItem, suggestedExpiryDate } from '@/constants/dattlItems';
 import { useLanguage } from '@/context/language';
@@ -228,7 +228,21 @@ export function ListScreen({ mode }: { mode: Mode }) {
   const [form, setForm] = useState<FormState>(freshForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const hasLoaded    = useRef(false);
-  const maxPickerDate = useRef(new Date()).current;
+
+  // Upper bound for the "opened on" picker. This used to be `useRef(new Date()).current`
+  // — captured once, at mount. The tab stays mounted for the whole app session, so the
+  // bound aged while `form.openedOn` did not: freshForm() sets openedOn to *now*, and
+  // openModal() runs whenever the user taps add. Open the app, browse for five minutes,
+  // tap add, and the picker got value = now and maximumDate = now-minus-five-minutes.
+  //
+  // On iOS the picker renders with display="inline" (UIDatePickerStyleInline), which iOS 26
+  // rebuilt on UICalendarView. It asserts when the selected date is outside its range
+  // instead of clamping like older iOS did — that is REACT-NATIVE-5:
+  // NSInternalInconsistencyException, "Invalid state. Unable to find a lower bounds in range."
+  //
+  // Re-derived on every modal open so it cannot go stale, and held in state (not recomputed
+  // per render) so the native picker keeps a stable prop identity.
+  const [pickerMaxDate, setPickerMaxDate] = useState<Date>(endOfToday);
 
   const { favorites, toggleFavorite } = useFavorites(cfg.favoritesKey);
 
@@ -316,6 +330,10 @@ export function ListScreen({ mode }: { mode: Mode }) {
       setEditingId(null);
       setForm(freshForm());
     }
+    // Refresh the picker's upper bound for this session of the modal. Without this
+    // it would still hold the bound from mount and reject a freshly-created
+    // openedOn (= now) as out of range.
+    setPickerMaxDate(endOfToday());
     setIsDirty(false);
     setModalVisible(true);
   }, []);
@@ -892,14 +910,18 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 style={form.activePicker !== 'openedOn' ? styles.pickerSlotHidden : undefined}
                 pointerEvents={form.activePicker !== 'openedOn' ? 'none' : 'auto'}
               >
+                {/* value MUST satisfy minimumDate <= value <= maximumDate. UICalendarView
+                    asserts, it does not clamp — so clamp before it ever sees the value.
+                    An item added earlier in this same session has dateAdded > pickerMaxDate
+                    if the clock has since passed midnight; clampDate absorbs that too. */}
                 <DateTimePicker
-                  value={safeDate(form.openedOn)}
+                  value={clampDate(form.openedOn, PICKER_MIN_DATE, pickerMaxDate)}
                   mode="date"
                   display={PICKER_INLINE ? 'inline' : 'default'}
                   themeVariant="dark"
                   accentColor={colors.accent}
                   minimumDate={PICKER_MIN_DATE}
-                  maximumDate={maxPickerDate}
+                  maximumDate={pickerMaxDate}
                   onChange={(_, selectedDate) => {
                     setForm(prev => {
                       if (prev.activePicker !== 'openedOn') return prev;
@@ -917,8 +939,11 @@ export function ListScreen({ mode }: { mode: Mode }) {
                 style={form.activePicker !== 'expiry' ? styles.pickerSlotHidden : undefined}
                 pointerEvents={form.activePicker !== 'expiry' ? 'none' : 'auto'}
               >
+                {/* No maximumDate here (expiry is legitimately in the future), but the
+                    lower bound still has to hold: a corrupt pre-2000 expiryDate would
+                    otherwise put value below minimumDate and trip the same assertion. */}
                 <DateTimePicker
-                  value={safeDate(form.date)}
+                  value={clampDate(form.date, PICKER_MIN_DATE)}
                   mode="date"
                   display={PICKER_INLINE ? 'inline' : 'default'}
                   themeVariant="dark"

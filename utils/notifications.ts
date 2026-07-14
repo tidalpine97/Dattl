@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 
 import type { Item } from './storage';
-import { isValidDate } from './dates';
+import { isValidDate, parseLocalDate } from './dates';
 
 // ─── Time constants ────────────────────────────────────────────────────────────
 
@@ -15,6 +15,11 @@ export const NOTIF_TIME_SUBSCRIPTIONS = '10:00';
 const ITEM_NOTIF_IDS_KEY    = 'dattl_notif_item_ids';
 const SCHEDULE_HORIZON_DAYS = 90;
 const IOS_NOTIF_LIMIT       = 64;
+
+// Nothing legitimately schedules further out than the horizon plus a year of
+// slack. A fire date beyond this means the source data is corrupt (a bad year,
+// a rolled-over month), not that the user owns very long-life yoghurt.
+const MAX_SCHEDULE_AHEAD_MS = (SCHEDULE_HORIZON_DAYS + 365) * 24 * 60 * 60 * 1000;
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -33,15 +38,27 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
-// Parses "YYYY-MM-DD..." as local midnight, not UTC midnight.
-// new Date("2026-04-24") → UTC midnight → 22:00 local in UTC+2 (yesterday!).
-// This fix ensures today's items are never treated as past-dated.
-function parseLocalDate(dateStr: string): Date {
-  const [year, month, day] = (dateStr ?? '').split('-').map(Number);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return new Date(NaN);
+// The one gate every Date must pass before it crosses the expo-notifications
+// bridge. expo-modules-core casts `trigger.date` to a Swift `Date` on the
+// AsyncFunctionQueue; an Invalid Date arrives as NaN, fails that cast and takes
+// the process down natively. A JS try/catch around scheduleNotificationAsync
+// does NOT catch it — the throw happens in Swift, not in JS — so the date has to
+// be rejected here, before the call, rather than handled after it.
+//
+// `notBefore` carries a 60s buffer: a trigger in the past (or firing this very
+// minute) is rejected outright rather than handed to UNCalendarNotificationTrigger.
+function isSchedulable(date: Date, notBefore: Date, context: string): boolean {
+  if (!isValidDate(date)) {
+    Sentry.captureMessage(`[Notifications] rejected invalid fire date (${context})`);
+    return false;
   }
-  return new Date(year, month - 1, day);
+  const ms = date.getTime();
+  if (ms <= notBefore.getTime()) return false; // in the past — nothing to schedule
+  if (ms > notBefore.getTime() + MAX_SCHEDULE_AHEAD_MS) {
+    Sentry.captureMessage(`[Notifications] rejected out-of-range fire date (${context}): ${date.toISOString()}`);
+    return false;
+  }
+  return true;
 }
 
 function parseTime(timeStr: string): { hour: number; minute: number } {
@@ -68,11 +85,25 @@ function buildMorningBody(items: Item[]): string {
 
 // ─── Item notifications (batch per day) ───────────────────────────────────────
 
-let isReschedulingItems = false;
+// Reschedules read-modify-write ITEM_NOTIF_IDS_KEY, so two overlapping runs would
+// interleave their cancel/schedule passes and leak orphaned notification IDs.
+// They must not overlap — but the previous guard was a boolean that made a
+// concurrent call return immediately, silently DROPPING it. That lost real
+// updates: a time change in Settings landing while ListScreen's mount-effect
+// reschedule was still in flight was simply discarded, and the new time never
+// took effect until the next reschedule.
+//
+// Serialize instead of dropping: queue the call behind the in-flight one so it
+// still runs, just not concurrently. Callers get a promise that settles when
+// *their* run is done.
+let itemQueue: Promise<void> = Promise.resolve();
 
-export async function rescheduleAllItemNotifications(items: Item[]): Promise<void> {
-  if (isReschedulingItems) return;
-  isReschedulingItems = true;
+export function rescheduleAllItemNotifications(items: Item[]): Promise<void> {
+  itemQueue = itemQueue.catch(() => {}).then(() => runRescheduleAllItemNotifications(items));
+  return itemQueue;
+}
+
+async function runRescheduleAllItemNotifications(items: Item[]): Promise<void> {
   try {
     // Cancel all previously scheduled item notifications
     const storedIds = await AsyncStorage.getItem(ITEM_NOTIF_IDS_KEY);
@@ -113,7 +144,7 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
 
     const newIds: string[] = [];
     let scheduled = 0;
-    // 60-second buffer guards against race conditions at the exact current minute.
+    // 60-second buffer guards against a trigger landing in the current minute.
     const nowPlus60 = new Date(Date.now() + 60_000);
 
     for (const [key, dayItems] of [...byDay.entries()].sort()) {
@@ -123,9 +154,7 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
 
       // Morning notification on expiry day
       const morningAt = buildFireDate(expiryDate, morningTime);
-      if (!isValidDate(morningAt)) {
-        Sentry.captureMessage(`Skipped item morning notif: invalid date for "${key}"`);
-      } else if (morningAt > nowPlus60 && scheduled < IOS_NOTIF_LIMIT) {
+      if (isSchedulable(morningAt, nowPlus60, `item morning ${key}`) && scheduled < IOS_NOTIF_LIMIT) {
         const id = await Notifications.scheduleNotificationAsync({
           content: { title: 'Dattl', body: buildMorningBody(dayItems) },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: morningAt },
@@ -138,9 +167,7 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
       const prevDay = new Date(expiryDate);
       prevDay.setDate(prevDay.getDate() - 1);
       const eveningAt = buildFireDate(prevDay, eveningTime);
-      if (!isValidDate(eveningAt)) {
-        Sentry.captureMessage(`Skipped item evening notif: invalid date for "${key}"`);
-      } else if (eveningAt > nowPlus60 && scheduled < IOS_NOTIF_LIMIT) {
+      if (isSchedulable(eveningAt, nowPlus60, `item evening ${key}`) && scheduled < IOS_NOTIF_LIMIT) {
         const count = dayItems.length;
         const body = count === 1
           ? `Tomorrow ${dayItems[0].name} expires — time to shop?`
@@ -156,11 +183,12 @@ export async function rescheduleAllItemNotifications(items: Item[]): Promise<voi
 
     await AsyncStorage.setItem(ITEM_NOTIF_IDS_KEY, JSON.stringify(newIds));
   } catch (e) {
+    // Catches JS-level failures only (AsyncStorage, permissions). A native
+    // Objective-C exception raised inside expo-notifications does not surface
+    // here — see isSchedulable().
     Sentry.captureException(e);
     console.error('[Notifications] rescheduleAllItemNotifications failed:', e);
     // Never rethrow — notification failure must not crash the app.
-  } finally {
-    isReschedulingItems = false;
   }
 }
 
@@ -182,11 +210,7 @@ export async function scheduleSubscriptionNotifications(item: Item): Promise<str
     const fireDate = new Date(renewDate);
     fireDate.setDate(fireDate.getDate() - daysAhead);
     const fireAt = buildFireDate(fireDate, time);
-    if (!isValidDate(fireAt)) {
-      Sentry.captureMessage(`Skipped subscription notif: invalid fireAt for ${item.id}`);
-      continue;
-    }
-    if (fireAt <= nowPlus60) continue;
+    if (!isSchedulable(fireAt, nowPlus60, `subscription ${item.id} D-${daysAhead}`)) continue;
 
     const body = daysAhead === 7
       ? `📅 ${item.name} renews in 7 days — still time to cancel`
@@ -209,12 +233,21 @@ export async function cancelSubscriptionNotifications(ids: string[] | undefined)
   ));
 }
 
-let isReschedulingSubscriptions = false;
+// Serialized for the same reason as the item queue above: overlapping runs would
+// cancel IDs the other run had just scheduled. Queued, not dropped, so a caller
+// never silently loses its update.
+let subscriptionQueue: Promise<unknown> = Promise.resolve();
 
 // Cancels and reschedules all subscriptions; returns updated items with new notification IDs.
-export async function rescheduleAllSubscriptionNotifications(subscriptions: Item[]): Promise<Item[]> {
-  if (isReschedulingSubscriptions) return subscriptions;
-  isReschedulingSubscriptions = true;
+export function rescheduleAllSubscriptionNotifications(subscriptions: Item[]): Promise<Item[]> {
+  const next = subscriptionQueue
+    .catch(() => {})
+    .then(() => runRescheduleAllSubscriptionNotifications(subscriptions));
+  subscriptionQueue = next;
+  return next;
+}
+
+async function runRescheduleAllSubscriptionNotifications(subscriptions: Item[]): Promise<Item[]> {
   try {
     const updated: Item[] = [];
     for (const sub of subscriptions) {
@@ -227,8 +260,6 @@ export async function rescheduleAllSubscriptionNotifications(subscriptions: Item
     Sentry.captureException(e);
     console.error('[Notifications] rescheduleAllSubscriptionNotifications failed:', e);
     return subscriptions; // return originals unchanged on failure
-  } finally {
-    isReschedulingSubscriptions = false;
   }
 }
 
