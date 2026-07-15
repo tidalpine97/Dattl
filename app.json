@@ -13,7 +13,13 @@
       "bundleIdentifier": "io.dattl.app",
       "appleTeamId": "REPLACE_WITH_TEAM_ID",
       "entitlements": {
-        "com.apple.security.application-groups": ["group.io.dattl.app"]
+        "com.apple.security.application-groups": [
+          "group.io.dattl.app",
+          "group.io.dattl.app"
+        ]
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -63,7 +69,24 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "552eb033-3d4e-4525-9674-c7d4e7ca8d6a"
+        "projectId": "552eb033-3d4e-4525-9674-c7d4e7ca8d6a",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "io.dattl.app.DattlWidget",
+                  "targetName": "DattlWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.io.dattl.app"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
       }
     }
   }

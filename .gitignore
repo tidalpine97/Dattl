@@ -152,3 +152,4 @@ expo-env.d.ts
 # entirely when a native directory is committed, which would silently drop every
 # config plugin — including the one that creates the widget target.
 /ios
+.expo/
